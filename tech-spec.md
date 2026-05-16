@@ -1,7 +1,3 @@
-Berikut adalah **Technical Specification (Tech Spec)** untuk pengembangan aplikasi **GiziGo** versi MVP.
-
----
-
 # Technical Specification: GiziGo Mobile Application
 
 ## 1. Project Overview
@@ -15,7 +11,6 @@ Sistem menggunakan arsitektur **Client-Server** dengan komunikasi melalui **REST
 *   **Frontend:** Flutter (Mobile App).
 *   **Backend:** Nest.js (REST API & Business Logic) dengan `firebase-admin` SDK.
 *   **Database & Infrastructure:** Firebase (Firestore, Authentication, Storage).
-*   **External Integration:** MockAPI (menggunakan `@nestjs/axios` untuk request HTTP ke layanan pihak ketiga).
 
 ---
 
@@ -27,7 +22,6 @@ Sistem menggunakan arsitektur **Client-Server** dengan komunikasi melalui **REST
 | **Authentication** | Firebase Auth & `firebase-admin` | Mendukung OAuth2 (Google Sign-In) di Frontend dan verifikasi token JWT di Backend via Admin SDK. |
 | **Database** | Cloud Firestore | *NoSQL document-based*, mendukung sinkronisasi *real-time* dan query fleksibel. |
 | **File Storage** | Cloudinary | Penyimpanan aset gambar. Cloudinary cocok untuk optimasi gambar *on-the-fly*. |
-| **API Requests** | `@nestjs/axios` | Module bawaan NestJS berbasis Axios untuk mem-fetch MockAPI secara asinkron menggunakan *Observables*. |
 | **API Documentation** | Swagger/OpenAPI | Standarisasi dokumentasi API untuk integrasi Frontend-Backend. |
 
 ---
@@ -52,6 +46,10 @@ Struktur data dirancang untuk mendukung transisi dari MVP ke fitur *Merchant* di
 *   `base_price`: number
 *   `merchant_id`: string (Reference to `merchants`)
 *   `is_available`: boolean
+*   `comparison_data`: object (Data perbandingan harga dan tautan)
+    *   `gofood`: object (`price`: number, `url`: string)
+    *   `grabfood`: object (`price`: number, `url`: string)
+    *   `shopeefood`: object (`price`: number, `url`: string)
 
 ### C. Collection: `merchants`
 *   `merchant_id`: string (Primary Key)
@@ -75,8 +73,8 @@ Struktur data dirancang untuk mendukung transisi dari MVP ke fitur *Merchant* di
 *   `GET /foods/:id`: Detail makanan termasuk perbandingan harga.
 *   `GET /foods/search?q=`: Pencarian berdasarkan nama/deskripsi.
 
-### 3. Comparison Logic (Integration with MockAPI)
-*   `GET /compare-price/:food_id`: Backend melakukan request HTTP via `@nestjs/axios` ke MockAPI GoFood, GrabFood, dan ShopeeFood, lalu mengembalikan data yang diagregasi.
+### 3. Comparison Logic (Local Static Mock Data)
+*   `GET /compare-price/:food_id`: Backend mengambil dokumen terkait dari Firestore yang berisi harga dan URL yang telah diinput admin secara manual. Backend dapat mengembalikan harga tersebut secara statis, atau menerapkan simulasi dinamis (misalnya fluktuasi harga acak $\pm 5\%$) untuk menyimulasikan promo atau perubahan harga secara real-time.
 
 ### 4. Admin (Internal - Membutuhkan Auth Token & Role 'admin')
 *   `POST /admin/foods`: Input data makanan baru.
@@ -103,7 +101,7 @@ Dimana:
 Algoritma filter pada MVP akan memprioritaskan hasil berdasarkan:
 1.  **Relevansi Label:** Kesesuaian dengan input kategori user (misal: "Vegan", "High Protein").
 2.  **Jarak:** Merchant terdekat dari koordinat user hasil kalkulasi backend.
-3.  **Harga:** Urutan dari yang termurah berdasarkan data dari MockAPI yang diproses via `@nestjs/axios`.
+3.  **Harga:** Urutan dari yang termurah berdasarkan data perbandingan yang disimulasikan dari backend.
 
 ---
 
@@ -138,14 +136,14 @@ Algoritma filter pada MVP akan memprioritaskan hasil berdasarkan:
     *   Pada *Homepage*, Flutter menggunakan `geolocator` lalu mengirim *GET request* ke backend Nest.js dengan membawa *query parameter*: `GET /foods?lat=-6.20&lng=106.81`.
     *   Backend Nest.js merespon dengan daftar makanan bergizi yang sudah difilter dan diurutkan berdasarkan *Haversine distance*.
 4.  **Redirect / Deep Linking Pemesanan:**
-    *   Aplikasi memanfaatkan package `url_launcher`. Saat user menekan tombol harga dari GoFood/GrabFood hasil balasan MockAPI, Flutter akan membuka URL *scheme* aplikasi terkait (contoh: `gofood://merchant/...` atau link web *fallback*) untuk meneruskan pesanan.
+    *   Aplikasi memanfaatkan package `url_launcher`. Saat user menekan tombol harga dari GoFood/GrabFood hasil balasan backend dari data statis yang diolah, Flutter akan membuka URL *scheme* aplikasi terkait yang telah diinput admin (contoh: `gofood://merchant/...` atau link web *fallback*) untuk meneruskan pesanan.
 
 ---
 
 ## 9. Roadmap Pengembangan (MVP)
 *   **Minggu 1:** Setup Environment (Nest.js & Flutter), Firebase Configuration, Auth Module.
 *   **Minggu 2:** Pengembangan Schema Firestore, Admin Dashboard (API), Manual Data Entry.
-*   **Minggu 3:** Integrasi MockAPI untuk Price Comparison, UI Homepage & Search.
+*   **Minggu 3:** Implementasi Simulasi Data & Deep Linking untuk Price Comparison, UI Homepage & Search.
 *   **Minggu 4:** Testing (UAT), Bug Fixing, dan Persiapan Pitching Hackathon.
 
 ---
