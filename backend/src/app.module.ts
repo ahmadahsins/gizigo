@@ -7,6 +7,8 @@ import { FirebaseModule } from './firebase/firebase.module';
 import { AuthModule } from './auth/auth.module';
 import { FoodsModule } from './foods/foods.module';
 import { AdminModule } from './admin/admin.module';
+import { UsersModule } from './users/users.module';
+import { MetaModule } from './meta/meta.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { AdminModule } from './admin/admin.module';
     AuthModule,
     FoodsModule,
     AdminModule,
+    UsersModule,
+    MetaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

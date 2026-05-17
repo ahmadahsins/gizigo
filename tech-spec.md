@@ -27,81 +27,164 @@ Sistem menggunakan arsitektur **Client-Server** dengan komunikasi melalui **REST
 ---
 
 ## 4. Database Schema (Firestore)
-Struktur data dirancang untuk mendukung transisi dari MVP ke fitur *Merchant* di masa depan.
+
+Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, histori).
 
 ### A. Collection: `users`
-*   `uid`: string (Primary Key - dari Firebase Auth)
+
+*   `uid`: string (Primary Key – sama dengan Firebase Auth UID; dokumen `users/{uid}`)
 *   `name`: string
-*   `username`: string (unique)
+*   `username`: string (unique, opsional)
 *   `email`: string
-*   `role`: string ("customer", "admin", "merchant")
+*   `role`: string (`customer`, `admin`, `merchant`)
+*   `preferred_language`: string (opsional, mis. `en_US`)
+*   `dark_mode`: boolean (opsional; bisa juga hanya lokal di Flutter)
 *   `created_at`: timestamp
 
-### B. Collection: `foods`
-*   `food_id`: string (Primary Key)
-*   `name`: string
-*   `description`: text
-*   `photo_url`: string
-*   `health_labels`: array (e.g., ["High Protein", "Low Calorie", "Vegan"])
-*   `base_price`: number
-*   `merchant_id`: string (Reference to `merchants`)
-*   `is_available`: boolean
-*   `comparison_data`: object (Data perbandingan harga dan tautan)
-    *   `gofood`: object (`price`: number, `url`: string)
-    *   `grabfood`: object (`price`: number, `url`: string)
-    *   `shopeefood`: object (`price`: number, `url`: string)
+### B. Subcollections under `users/{uid}`
 
-### C. Collection: `merchants`
-*   `merchant_id`: string (Primary Key)
-*   `name`: string
+**`recently_viewed/{food_id}`** (ID dokumen = ID dokumen food di koleksi `foods`)
+
+*   `food_id`: string
+*   `viewed_at`: timestamp
+
+**Firestore index disarankan:** subcollection `recently_viewed` dengan `orderBy viewed_at desc` (Firebase Console akan mengarahkan pembuatan index jika diperlukan).
+
+**`recent_locations/{location_id}`** (`location_id` deterministik dari pembulatan lat/lng)
+
+*   `label`: string (mis. nama POI)
 *   `address`: string
-*   `coordinates`: geopoint (lat, long)
-*   `geohash`: string (Digunakan untuk optimasi query pencarian berbasis lokasi/radius)
+*   `lat`, `lng`: number
+*   `distance_km`: number (opsional; bisa diisi klien)
+*   `last_used_at`: timestamp
+
+### C. Collection: `foods`
+
+*   `food_id`: string (disimpan konsisten dengan ID dokumen Firestore)
+*   `name`: string
+*   `description`: string
+*   `photo_url`: string
+*   **`nutrition_grade`**: string enum **`EXCELLENT` | `VERY_GOOD` | `GOOD`** (badge “Excellent / Very good / Good” + filter **Label** di UI)
+*   **`food_category`**: string salah satu: `main_course`, `appetizers`, `snacks`, `desserts`, `beverages` (chip **Categories** di home)
+*   `health_labels`: array string (tag tambahan, mis. “High Protein”; **bukan** pengganti `nutrition_grade`)
+*   `nutritional_info`: map opsional `{ calories?, protein_g?, fat_g?, carb_g? }`
+*   `base_price`: number (IDR)
+*   `merchant_id`: string (referensi ke `merchants`)
+*   `is_available`: boolean
+*   `is_featured`: boolean (opsional; kartu hero “You Might Like This”)
+*   `recommendation_score`: number (opsional; urutan `sort=recommended`)
+*   `comparison_data`: object per provider (harga & deeplink)
+    *   `gofood` | `grabfood` | `shopeefood`: `{ price: number, url: string, icon_url?: string }`
+
+### D. Collection: `merchants`
+
+*   `merchant_id`: string (Primary Key konsisten dengan referensi di `foods`)
+*   `name`: string (nama warung / vendor untuk UI)
+*   `address`: string
+*   `coordinates`: GeoPoint
+*   `geohash`: string (opsional; optimasi radius)
 *   `is_verified`: boolean
+
+### E. Catatan query backend
+
+*   Listing saat ini mengambil semua `foods` dengan `is_available == true`, lalu memfilter/pagination di memori (cukup untuk dataset hackathon). Untuk produksi, tambahkan composite index Firestore jika memindahkan filter `nutrition_grade` / `food_category` ke query native.
 
 ---
 
-## 5. API Design (Nest.js Endpoints)
+## 5. API Design (Nest.js)
 
-### 1. Authentication
-*   `POST /auth/signup`: Pendaftaran user baru (di-handle Frontend via Firebase, backend opsional menyimpan data profil ke Firestore).
-*   `POST /auth/login`: Login user via Firebase Auth.
-*   *(Backend mengandalkan token Firebase Auth JWT yang dikirim via header `Authorization: Bearer <token>` untuk validasi endpoint lainnya)*
+Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagger).
 
-### 2. Foods (Public/User - Membutuhkan Auth Token)
-*   `GET /foods`: Mengambil daftar makanan (support filter: `category`, `price_range`, `label`, `lat`, `lng`).
-*   `GET /foods/:id`: Detail makanan termasuk perbandingan harga.
-*   `GET /foods/search?q=`: Pencarian berdasarkan nama/deskripsi.
+**Header umum (endpoint terproteksi):** `Authorization: Bearer <Firebase_ID_Token>`
 
-### 3. Comparison Logic (Local Static Mock Data)
-*   `GET /compare-price/:food_id`: Backend mengambil dokumen terkait dari Firestore yang berisi harga dan URL yang telah diinput admin secara manual. Backend dapat mengembalikan harga tersebut secara statis, atau menerapkan simulasi dinamis (misalnya fluktuasi harga acak $\pm 5\%$) untuk menyimulasikan promo atau perubahan harga secara real-time.
+### 5.1 Authentication
 
-### 4. Admin (Internal - Membutuhkan Auth Token & Role 'admin')
-*   `POST /admin/foods`: Input data makanan baru.
-*   `PUT /admin/foods/:id`: Update data makanan.
-*   `DELETE /admin/foods/:id`: Soft delete data makanan.
+| Method | Path | Auth | Keterangan |
+| :--- | :--- | :--- | :--- |
+| POST | `/auth/login` | Bearer | Sinkronisasi user ke `users/{uid}` jika belum ada (`role`: `customer`). |
+
+### 5.2 Meta (publik, tanpa token)
+
+| Method | Path | Keterangan |
+| :--- | :--- | :--- |
+| GET | `/meta/food-categories` | Daftar kategori + label EN/ID untuk chip Flutter |
+| GET | `/meta/nutrition-grades` | Daftar tier gizi + label EN/ID (selaras `nutrition_grade`) |
+| GET | `/meta/locations/search?q=` | **Placeholder** — mengembalikan `items: []` sampai integrasi Places/Mapbox |
+
+### 5.3 Foods (Bearer wajib)
+
+| Method | Path | Keterangan |
+| :--- | :--- | :--- |
+| GET | `/foods` | Daftar terpaginasi + filter; respons `{ items, total, page, limit, total_pages }` |
+| GET | `/foods/search` | **Sama** dengan `/foods` (semua query parameter dapat dipakai bersamaan, termasuk `q`) |
+| GET | `/foods/:id` | Detail; menyertakan `price_comparisons[]` dan simulasi ±5% per provider |
+
+**Query `GET /foods` & `GET /foods/search`:**
+
+| Parameter | Tipe | Keterangan |
+| :--- | :--- | :--- |
+| `q` | string | Substring `name` / `description` |
+| `nutrition_grade` | enum | `EXCELLENT`, `VERY_GOOD`, `GOOD` |
+| `food_category` | string | Salah satu key kategori (lihat `/meta/food-categories`) |
+| `min_price`, `max_price` | number | Filter `base_price` |
+| `lat`, `lng` | number | Lokasi user (WGS84) untuk jarak |
+| `max_distance_km` | number | Butuh `lat` & `lng`; membuang item di luar radius |
+| `sort` | string | `distance` (default jika ada lat/lng), `price_asc`, `recommended` (default tanpa lokasi) |
+| `page`, `limit` | number | Pagination (`limit` maks. 100 pada implementasi saat ini) |
+| `featured_only` | boolean | `true` → hanya `is_featured` |
+
+**Field tambahan pada item list:** `vendor_name`, `image_url` (alias `photo_url`), dan `distance_in_km` jika `lat`/`lng` dikirim.
+
+**Response detail (`GET /foods/:id`):** selain field dokumen, tersedia:
+
+*   `vendor_name`, `image_url`
+*   `price_comparisons`: array `{ platform_key, platform, price, base_price, order_url, icon_url }`
+
+Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price` yang dikembalikan (lihat implementasi backend). Endpoint terpisah `/compare-price/:food_id` **tidak** digunakan; gunakan `GET /foods/:id`.
+
+### 5.4 Users (Bearer wajib)
+
+| Method | Path | Keterangan |
+| :--- | :--- | :--- |
+| GET | `/users/me` | Profil pengguna (`uid`, `name`, `email`, `username`, `role`, preferensi opsional) |
+| POST | `/users/me/recently-viewed` | Body `{ "food_id": "<docId>" }` — panggil saat membuka detail menu |
+| GET | `/users/me/recently-viewed` | Query `q`, `page`, `limit` — histori untuk layar “Recently viewed” |
+| POST | `/users/me/recent-locations` | Body lokasi; menyimpan/refresh entri recent |
+| GET | `/users/me/recent-locations` | Daftar lokasi terbaru |
+
+### 5.5 Admin (Bearer + role `admin`)
+
+| Method | Path | Keterangan |
+| :--- | :--- | :--- |
+| POST | `/admin/foods` | Buat dokumen `foods` (lihat DTO; wajib `nutrition_grade`, `food_category`) |
+| PUT | `/admin/foods/:id` | Partial update |
+| DELETE | `/admin/foods/:id` | Soft delete (`is_available: false`) |
 
 ---
 
 ## 6. Business Logic & Algorithms
 
 ### A. Perhitungan Jarak dan Geolocation Query
+
 Untuk menghitung jarak antara lokasi mahasiswa dan merchant, MVP akan menggunakan pendekatan:
+
 1.  **Geohash Filtering (Scale-up/Optimasi):** Memanfaatkan library seperti `geofire-common` pada backend untuk memfilter merchant dalam radius tertentu (misal 5-10km) guna membatasi jumlah data yang di-fetch dari Firestore.
-2.  **Formula Haversine (Backend Logic):** Setelah data merchant terdekat didapatkan, backend menghitung presisi jarak *real* menggunakan formula Haversine:
+2.  **Jarak geodesik (`geofire-common.distanceBetween`):** Listing menghitung jarak dalam km antara koordinat user dan `merchants.coordinates`, mengurutkan atau memotong dengan `max_distance_km`.
 
 $$d = 2r \arcsin\left(\sqrt{\sin^2\left(\frac{\phi_2 - \phi_1}{2}\right) + \cos(\phi_1) \cos(\phi_2) \sin^2\left(\frac{\lambda_2 - \lambda_1}{2}\right)}\right)$$
 
 Dimana:
+
 *   $r$: Jari-jari bumi (6.371 km).
 *   $\phi_1, \phi_2$: Lintang (latitude) lokasi 1 dan 2.
 *   $\lambda_1, \lambda_2$: Bujur (longitude) lokasi 1 dan 2.
 
 ### B. Filter & Ranking
-Algoritma filter pada MVP akan memprioritaskan hasil berdasarkan:
-1.  **Relevansi Label:** Kesesuaian dengan input kategori user (misal: "Vegan", "High Protein").
-2.  **Jarak:** Merchant terdekat dari koordinat user hasil kalkulasi backend.
-3.  **Harga:** Urutan dari yang termurah berdasarkan data perbandingan yang disimulasikan dari backend.
+
+1.  **Tingkat gizi:** Filter eksak pada `nutrition_grade` (badge & filter Label).
+2.  **Kategori menu:** Filter pada `food_category` (bukan lagi `array-contains` pada `health_labels`).
+3.  **Tag tambahan:** `health_labels` tetap ada untuk konten/marketing; filter utama Label memakai `nutrition_grade`.
+4.  **Jarak / harga / rekomendasi:** Kombinasi query parameter `sort`, `min_price` / `max_price`, dan `max_distance_km`.
 
 ---
 
@@ -126,17 +209,102 @@ Algoritma filter pada MVP akan memprioritaskan hasil berdasarkan:
 *   **Firebase SDK:** `firebase_core`, `firebase_auth`, dan `google_sign_in` untuk menangani proses autentikasi di sisi klien.
 
 ### C. Alur Integrasi Frontend ke Backend
+
 1.  **Flow Autentikasi:**
     *   User menekan tombol "Sign in with Google" di Flutter.
     *   Flutter menggunakan Firebase SDK untuk login dan menghasilkan **Firebase ID Token** (JWT).
     *   Token ini disimpan secara lokal di `flutter_secure_storage`.
-2.  **API Requests dengan Interceptor:**
-    *   Untuk setiap request ke endpoint Nest.js yang terproteksi (seperti interaksi Admin atau User Profile), interceptor dari `dio` akan mengambil token dan otomatis menambahkan header: `Authorization: Bearer <Firebase_ID_Token>`.
-3.  **Query Location-Based:**
-    *   Pada *Homepage*, Flutter menggunakan `geolocator` lalu mengirim *GET request* ke backend Nest.js dengan membawa *query parameter*: `GET /foods?lat=-6.20&lng=106.81`.
-    *   Backend Nest.js merespon dengan daftar makanan bergizi yang sudah difilter dan diurutkan berdasarkan *Haversine distance*.
-4.  **Redirect / Deep Linking Pemesanan:**
-    *   Aplikasi memanfaatkan package `url_launcher`. Saat user menekan tombol harga dari GoFood/GrabFood hasil balasan backend dari data statis yang diolah, Flutter akan membuka URL *scheme* aplikasi terkait yang telah diinput admin (contoh: `gofood://merchant/...` atau link web *fallback*) untuk meneruskan pesanan.
+    *   Panggil `POST /auth/login` dengan header Bearer agar dokumen `users/{uid}` terbuat di Firestore.
+2.  **API Requests dengan Interceptor (`dio`):**
+    *   Set `BaseOptions(baseUrl: 'https://<your-api-host>/')`.
+    *   Pada setiap request ke endpoint terproteksi, tambahkan header `Authorization: Bearer <Firebase_ID_Token>` (biasanya via `Interceptor` yang membaca token dari `flutter_secure_storage`).
+3.  **Konvensi JSON:** Backend memakai **`snake_case`** untuk field JSON (selaras Firestore). Di Flutter gunakan `@JsonKey(name: 'base_price')` / `json_serializable` atau mapper manual; hindari mengubah kontrak API hanya untuk gaya Dart.
+4.  **Meta bootstrap:** Saat cold start, opsional panggil `GET /meta/food-categories` dan `GET /meta/nutrition-grades` untuk mengisi chip kategori dan dropdown filter **Label** (badge tier).
+5.  **Home / Search listing:**
+    *   `GET /foods?lat=&lng=&sort=distance&nutrition_grade=EXCELLENT&food_category=main_course&min_price=&max_price=&page=1&limit=20`
+    *   Kartu hero: `GET /foods?featured_only=true&limit=5` (atau gabung filter lain).
+    *   Layar search memakai **`GET /foods/search`** dengan parameter **yang sama** seperti `/foods`, termasuk `q`.
+6.  **Detail menu:**
+    *   `GET /foods/{id}` → render deskripsi, `vendor_name`, `nutrition_grade`, dan list **`price_comparisons`** (gunakan `price` untuk teks hijau; `order_url` untuk `url_launcher`).
+    *   Setelah layar terbuka, panggil `POST /users/me/recently-viewed` dengan `{ "food_id": "<id>" }`.
+7.  **Recently viewed:** `GET /users/me/recently-viewed?q=&page=&limit=` — kelompokkan di Flutter berdasarkan tanggal dari `viewed_at` (hari ini / kemarin / tanggal).
+8.  **Lokasi:** Setelah user memilih lokasi (map / GPS), `POST /users/me/recent-locations`; daftar “Recent” dari `GET /users/me/recent-locations`. Autocomplete jalanan tetap bisa memakai Places di klien; `GET /meta/locations/search` saat ini placeholder.
+9.  **Profil:** `GET /users/me` untuk nama, email, role, dan preferensi opsional (`preferred_language`, `dark_mode`).
+
+### D. Pemetaan layar UI → endpoint
+
+| Layar | Endpoint utama |
+| :--- | :--- |
+| Home (kategori, filter, rekomendasi) | `GET /meta/food-categories`, `GET /foods`, `GET /foods?featured_only=true` |
+| Search | `GET /foods/search` |
+| Detail menu | `GET /foods/:id`, `POST /users/me/recently-viewed` |
+| Recently viewed | `GET /users/me/recently-viewed` |
+| Select location | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Places di Flutter) |
+| Profil | `GET /users/me` |
+
+### E. Contoh payload
+
+**List (`GET /foods`):**
+
+```json
+{
+  "items": [
+    {
+      "id": "abc123",
+      "name": "Ayam goreng",
+      "description": "…",
+      "photo_url": "https://…",
+      "image_url": "https://…",
+      "base_price": 17000,
+      "nutrition_grade": "EXCELLENT",
+      "food_category": "main_course",
+      "vendor_name": "Warteg Sendowo",
+      "distance_in_km": 1.2
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20,
+  "total_pages": 1
+}
+```
+
+**Detail (`GET /foods/:id`) — cuplikan:**
+
+```json
+{
+  "id": "abc123",
+  "name": "Ayam goreng",
+  "base_price": 17000,
+  "nutrition_grade": "EXCELLENT",
+  "vendor_name": "Warteg Sendowo",
+  "price_comparisons": [
+    {
+      "platform_key": "gofood",
+      "platform": "GoFood",
+      "price": 18000,
+      "base_price": 17500,
+      "order_url": "https://…",
+      "icon_url": "https://…"
+    }
+  ]
+}
+```
+
+**Badge di Flutter:** mapping `nutrition_grade` → warna/teks (label human-readable bisa dari `/meta/nutrition-grades` atau ARB lokal).
+
+### F. Contoh `dio` + interceptor (cuplikan)
+
+```dart
+final dio = Dio(BaseOptions(baseUrl: 'https://your-api.example.com'));
+dio.interceptors.add(InterceptorsWrapper(
+  onRequest: (options, handler) async {
+    final token = await secureStorage.read(key: 'id_token');
+    if (token != null) options.headers['Authorization'] = 'Bearer $token';
+    handler.next(options);
+  },
+));
+```
 
 ---
 
