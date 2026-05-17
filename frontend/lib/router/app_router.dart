@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/splash/presentation/screens/splash_screen.dart';
+import '../../features/splash/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/food/presentation/screens/food_detail_screen.dart';
@@ -12,6 +14,8 @@ class AppRouter {
   AppRouter._();
 
   // Route names
+  static const String splash = 'splash';
+  static const String welcome = 'welcome';
   static const String login = 'login';
   static const String home = 'home';
   static const String search = 'search';
@@ -24,9 +28,23 @@ class AppRouter {
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/login',
+    initialLocation: '/splash',
     debugLogDiagnostics: true,
     routes: [
+      // Splash screen
+      GoRoute(
+        path: '/splash',
+        name: splash,
+        builder: (context, state) => const SplashScreen(),
+      ),
+
+      // Welcome screen
+      GoRoute(
+        path: '/welcome',
+        name: welcome,
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+
       // Login (no bottom nav)
       GoRoute(
         path: '/login',

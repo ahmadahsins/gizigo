@@ -5,7 +5,7 @@ class AppColors {
   AppColors._();
 
   // Primary - Fresh Green (represents healthy food)
-  static const Color primary = Color(0xFF2ECC71);
+  static const Color primary = Color(0xFF1B6D24);
   static const Color primaryLight = Color(0xFF6FE89D);
   static const Color primaryDark = Color(0xFF1A9B50);
 
