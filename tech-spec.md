@@ -39,7 +39,15 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 *   `role`: string (`customer`, `admin`, `merchant`)
 *   `preferred_language`: string (opsional, mis. `en_US`)
 *   `dark_mode`: boolean (opsional; bisa juga hanya lokal di Flutter)
+*   **Onboarding / personalisasi (diset lewat `PATCH /users/me`):**
+    *   `gender`: string enum `MALE` | `FEMALE` | `OTHER` | `PREFER_NOT_TO_SAY`
+    *   `age`: number (tahun)
+    *   `weight_kg`, `height_cm`: number
+    *   `nutrition_goal`: string enum `DIET` | `BULKING` | `MAINTAIN` (memengaruhi `/foods/recommendations`)
+    *   `food_preferences`: array string (dicocokkan longgar dengan `foods.health_labels`)
+    *   `onboarding_completed`: boolean
 *   `created_at`: timestamp
+*   `updated_at`: timestamp (server)
 
 ### B. Subcollections under `users/{uid}`
 
@@ -101,7 +109,8 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 
 | Method | Path | Auth | Keterangan |
 | :--- | :--- | :--- | :--- |
-| POST | `/auth/login` | Bearer | Sinkronisasi user ke `users/{uid}` jika belum ada (`role`: `customer`). |
+| POST | `/auth/sync` | Bearer | Sinkronisasi user ke `users/{uid}` jika belum ada (`role`: `customer`, `onboarding_completed`: `false`). |
+| POST | `/auth/signup` | Bearer | **Alias** handler yang sama dengan `/auth/sync` — panggil setelah Firebase `createUserWithEmailAndPassword` atau Google sign-up. |
 
 ### 5.2 Meta (publik, tanpa token)
 
@@ -109,6 +118,7 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | :--- | :--- | :--- |
 | GET | `/meta/food-categories` | Daftar kategori + label EN/ID untuk chip Flutter |
 | GET | `/meta/nutrition-grades` | Daftar tier gizi + label EN/ID (selaras `nutrition_grade`) |
+| GET | `/meta/nutrition-goals` | Label wizard untuk `nutrition_goal` (`DIET`, `BULKING`, `MAINTAIN`) |
 | GET | `/meta/locations/search?q=` | **Placeholder** — mengembalikan `items: []` sampai integrasi Places/Mapbox |
 
 ### 5.3 Foods (Bearer wajib)
@@ -117,7 +127,18 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | :--- | :--- | :--- |
 | GET | `/foods` | Daftar terpaginasi + filter; respons `{ items, total, page, limit, total_pages }` |
 | GET | `/foods/search` | **Sama** dengan `/foods` (semua query parameter dapat dipakai bersamaan, termasuk `q`) |
+| GET | `/foods/recommendations` | Home: `{ featured, recommendations, context }` — personalisasi dari profil + opsional `lat`/`lng` |
 | GET | `/foods/:id` | Detail; menyertakan `price_comparisons[]` dan simulasi ±5% per provider |
+
+**Query `GET /foods/recommendations`:**
+
+| Parameter | Keterangan |
+| :--- | :--- |
+| `lat`, `lng` | Opsional — menambah `distance_in_km` pada item dan sedikit boost jarak dekat |
+| `featured_limit` | Default `1` — jumlah slot hero “You Might Like This” (mis. `is_featured` diprioritaskan) |
+| `limit` | Default `15` — panjang list “Recommendations for You” setelah featured |
+
+Tanpa `nutrition_goal` / `food_preferences` di profil, ranking fallback ke `recommendation_score` + tier gizi (+ jarak jika ada).
 
 **Query `GET /foods` & `GET /foods/search`:**
 
@@ -146,7 +167,8 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 
 | Method | Path | Keterangan |
 | :--- | :--- | :--- |
-| GET | `/users/me` | Profil pengguna (`uid`, `name`, `email`, `username`, `role`, preferensi opsional) |
+| GET | `/users/me` | Profil lengkap termasuk field onboarding |
+| PATCH | `/users/me` | Partial update — onboarding (`gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `onboarding_completed`, dll.) |
 | POST | `/users/me/recently-viewed` | Body `{ "food_id": "<docId>" }` — panggil saat membuka detail menu |
 | GET | `/users/me/recently-viewed` | Query `q`, `page`, `limit` — histori untuk layar “Recently viewed” |
 | POST | `/users/me/recent-locations` | Body lokasi; menyimpan/refresh entri recent |
@@ -186,6 +208,10 @@ Dimana:
 3.  **Tag tambahan:** `health_labels` tetap ada untuk konten/marketing; filter utama Label memakai `nutrition_grade`.
 4.  **Jarak / harga / rekomendasi:** Kombinasi query parameter `sort`, `min_price` / `max_price`, dan `max_distance_km`.
 
+### C. Rekomendasi personal (`GET /foods/recommendations`)
+
+Skor menggabungkan `recommendation_score`, bobot `nutrition_grade`, isi `nutritional_info` sesuai `nutrition_goal` (**DIET**: lebih rendah kalori / lemak; **BULKING**: lebih tinggi protein; **MAINTAIN**: keseimbangan), bonus kecocokan `food_preferences` dengan `health_labels`, dan bonus jarak jika `lat`/`lng` dikirim. Slot **featured** mengutamakan `is_featured` pada urutan skor tertinggi. Tanpa goal maupun preferensi, digunakan skor generik (`recommendation_score` + tier + jarak).
+
 ---
 
 ## 7. Security & Validation
@@ -211,36 +237,40 @@ Dimana:
 ### C. Alur Integrasi Frontend ke Backend
 
 1.  **Flow Autentikasi:**
-    *   User menekan tombol "Sign in with Google" di Flutter.
-    *   Flutter menggunakan Firebase SDK untuk login dan menghasilkan **Firebase ID Token** (JWT).
-    *   Token ini disimpan secara lokal di `flutter_secure_storage`.
-    *   Panggil `POST /auth/login` dengan header Bearer agar dokumen `users/{uid}` terbuat di Firestore.
-2.  **API Requests dengan Interceptor (`dio`):**
+    *   **Email signup:** Firebase `createUserWithEmailAndPassword` → `POST /auth/signup` (atau `/auth/sync`) dengan Bearer.
+    *   **Google:** sign-in → token → `POST /auth/sync` atau `/auth/signup` (handler sama).
+    *   Token disimpan di `flutter_secure_storage`; interceptor `dio` menyematkan header Bearer.
+2.  **Onboarding (setelah registrasi):**
+    *   Ambil label goal dari `GET /meta/nutrition-goals`.
+    *   Kirim `PATCH /users/me` dengan `gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `onboarding_completed: true`.
+3.  **API Requests dengan Interceptor (`dio`):**
     *   Set `BaseOptions(baseUrl: 'https://<your-api-host>/')`.
     *   Pada setiap request ke endpoint terproteksi, tambahkan header `Authorization: Bearer <Firebase_ID_Token>` (biasanya via `Interceptor` yang membaca token dari `flutter_secure_storage`).
-3.  **Konvensi JSON:** Backend memakai **`snake_case`** untuk field JSON (selaras Firestore). Di Flutter gunakan `@JsonKey(name: 'base_price')` / `json_serializable` atau mapper manual; hindari mengubah kontrak API hanya untuk gaya Dart.
-4.  **Meta bootstrap:** Saat cold start, opsional panggil `GET /meta/food-categories` dan `GET /meta/nutrition-grades` untuk mengisi chip kategori dan dropdown filter **Label** (badge tier).
-5.  **Home / Search listing:**
-    *   `GET /foods?lat=&lng=&sort=distance&nutrition_grade=EXCELLENT&food_category=main_course&min_price=&max_price=&page=1&limit=20`
-    *   Kartu hero: `GET /foods?featured_only=true&limit=5` (atau gabung filter lain).
-    *   Layar search memakai **`GET /foods/search`** dengan parameter **yang sama** seperti `/foods`, termasuk `q`.
-6.  **Detail menu:**
+4.  **Konvensi JSON:** Backend memakai **`snake_case`** untuk field JSON (selaras Firestore). Di Flutter gunakan `@JsonKey(name: 'base_price')` / `json_serializable` atau mapper manual; hindari mengubah kontrak API hanya untuk gaya Dart.
+5.  **Meta bootstrap:** `GET /meta/food-categories`, `GET /meta/nutrition-grades`, `GET /meta/nutrition-goals` untuk chip/filter dan wizard onboarding.
+6.  **Home — rekomendasi personal:**
+    *   `GET /foods/recommendations?lat=&lng=&featured_limit=1&limit=15` → `featured[]` untuk kartu besar “You Might Like This”, `recommendations[]` untuk list “Recommendations for You”.
+    *   Kategori horizontal / filter lain boleh tetap pakai `GET /foods` dengan query yang sama seperti sebelumnya.
+7.  **Search listing:** **`GET /foods/search`** dengan parameter **yang sama** seperti `/foods`, termasuk `q`.
+8.  **Detail menu:**
     *   `GET /foods/{id}` → render deskripsi, `vendor_name`, `nutrition_grade`, dan list **`price_comparisons`** (gunakan `price` untuk teks hijau; `order_url` untuk `url_launcher`).
     *   Setelah layar terbuka, panggil `POST /users/me/recently-viewed` dengan `{ "food_id": "<id>" }`.
-7.  **Recently viewed:** `GET /users/me/recently-viewed?q=&page=&limit=` — kelompokkan di Flutter berdasarkan tanggal dari `viewed_at` (hari ini / kemarin / tanggal).
-8.  **Lokasi:** Setelah user memilih lokasi (map / GPS), `POST /users/me/recent-locations`; daftar “Recent” dari `GET /users/me/recent-locations`. Autocomplete jalanan tetap bisa memakai Places di klien; `GET /meta/locations/search` saat ini placeholder.
-9.  **Profil:** `GET /users/me` untuk nama, email, role, dan preferensi opsional (`preferred_language`, `dark_mode`).
+9.  **Recently viewed:** `GET /users/me/recently-viewed?q=&page=&limit=` — kelompokkan di Flutter berdasarkan tanggal dari `viewed_at` (hari ini / kemarin / tanggal).
+10. **Lokasi:** Setelah user memilih lokasi (map / GPS), `POST /users/me/recent-locations`; daftar “Recent” dari `GET /users/me/recent-locations`. Autocomplete jalanan tetap bisa memakai Places di klien; `GET /meta/locations/search` saat ini placeholder.
+11. **Profil:** `GET /users/me` / `PATCH /users/me` untuk menampilkan dan mengubah data akun + onboarding.
 
 ### D. Pemetaan layar UI → endpoint
 
 | Layar | Endpoint utama |
 | :--- | :--- |
-| Home (kategori, filter, rekomendasi) | `GET /meta/food-categories`, `GET /foods`, `GET /foods?featured_only=true` |
+| Login / Sign up (sync) | `POST /auth/sync`, `POST /auth/signup` |
+| Onboarding wizard | `GET /meta/nutrition-goals`, `PATCH /users/me` |
+| Home (personalized) | `GET /foods/recommendations`, `GET /meta/food-categories`, `GET /foods` (filter/kategori) |
 | Search | `GET /foods/search` |
 | Detail menu | `GET /foods/:id`, `POST /users/me/recently-viewed` |
 | Recently viewed | `GET /users/me/recently-viewed` |
 | Select location | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Places di Flutter) |
-| Profil | `GET /users/me` |
+| Profil | `GET /users/me`, `PATCH /users/me` |
 
 ### E. Contoh payload
 
@@ -292,6 +322,20 @@ Dimana:
 ```
 
 **Badge di Flutter:** mapping `nutrition_grade` → warna/teks (label human-readable bisa dari `/meta/nutrition-grades` atau ARB lokal).
+
+**Rekomendasi Home (`GET /foods/recommendations`) — bentuk respons:**
+
+```json
+{
+  "featured": [{ "id": "…", "personalization_score": 128.5, "is_featured": true }],
+  "recommendations": [{ "id": "…", "personalization_score": 95 }],
+  "context": {
+    "nutrition_goal": "DIET",
+    "onboarding_completed": true,
+    "personalized": true
+  }
+}
+```
 
 ### F. Contoh `dio` + interceptor (cuplikan)
 

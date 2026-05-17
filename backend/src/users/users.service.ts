@@ -4,6 +4,7 @@ import { FirebaseService } from '../firebase/firebase.service';
 import { RecordRecentlyViewedDto } from './dto/record-recently-viewed.dto';
 import { RecordRecentLocationDto } from './dto/record-recent-location.dto';
 import { RecentlyViewedQueryDto } from './dto/recently-viewed-query.dto';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -17,6 +18,27 @@ export class UsersService {
     const doc = await this.db().collection('users').doc(uid).get();
     const data = doc.data() ?? {};
     return this.normalizeProfile(uid, data);
+  }
+
+  async updateProfile(uid: string, dto: UpdateUserProfileDto) {
+    const ref = this.db().collection('users').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new NotFoundException(
+        'User not found — call POST /auth/sync (or /auth/signup) first',
+      );
+    }
+
+    const patch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(dto)) {
+      if (value !== undefined) {
+        patch[key] = value;
+      }
+    }
+    patch['updated_at'] = admin.firestore.FieldValue.serverTimestamp();
+
+    await ref.set(patch, { merge: true });
+    return this.getProfile(uid);
   }
 
   async recordRecentlyViewed(uid: string, dto: RecordRecentlyViewedDto) {
@@ -147,6 +169,15 @@ export class UsersService {
       email: data.email ?? null,
       username: data.username ?? data.name ?? null,
       role: data.role ?? 'customer',
+      gender: data.gender ?? null,
+      age: data.age ?? null,
+      weight_kg: data.weight_kg ?? null,
+      height_cm: data.height_cm ?? null,
+      nutrition_goal: data.nutrition_goal ?? null,
+      food_preferences: Array.isArray(data.food_preferences)
+        ? data.food_preferences
+        : [],
+      onboarding_completed: Boolean(data.onboarding_completed),
       preferred_language: data.preferred_language ?? null,
       dark_mode: data.dark_mode ?? null,
     };

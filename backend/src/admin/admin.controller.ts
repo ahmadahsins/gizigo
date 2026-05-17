@@ -9,12 +9,20 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiBody,
+  ApiOkResponse,
+} from '@nestjs/swagger';
+import { ADMIN_CREATE_FOOD_BODY_EXAMPLE } from '../swagger/api-examples';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { FirebaseService } from '../firebase/firebase.service';
 import { CreateFoodDto } from './dto/create-food.dto';
+import { UpdateFoodDto } from './dto/update-food.dto';
 import * as admin from 'firebase-admin';
 
 @ApiTags('admin')
@@ -26,7 +34,20 @@ export class AdminController {
   constructor(private firebaseService: FirebaseService) {}
 
   @Post('foods')
-  @ApiOperation({ summary: 'Create new food entry' })
+  @ApiOperation({
+    summary: 'Create new food entry',
+    description:
+      'Persist `nutrition_grade`, `food_category`, optional `nutritional_info` for recommendations.',
+  })
+  @ApiBody({
+    type: CreateFoodDto,
+    examples: { default: { value: ADMIN_CREATE_FOOD_BODY_EXAMPLE } },
+  })
+  @ApiOkResponse({
+    schema: {
+      example: { message: 'Food created successfully', id: 'autoFirestoreDocId' },
+    },
+  })
   async createFood(@Body() createFoodDto: CreateFoodDto) {
     try {
       const db = this.firebaseService.getFirestore();
@@ -49,10 +70,25 @@ export class AdminController {
   }
 
   @Put('foods/:id')
-  @ApiOperation({ summary: 'Update food entry' })
+  @ApiOperation({
+    summary: 'Update food entry',
+    description: 'Partial body allowed — same shape as create.',
+  })
+  @ApiBody({
+    type: UpdateFoodDto,
+    examples: {
+      patchPrice: {
+        summary: 'Update price only',
+        value: { base_price: 18500 },
+      },
+    },
+  })
+  @ApiOkResponse({
+    schema: { example: { message: 'Food updated successfully' } },
+  })
   async updateFood(
     @Param('id') id: string,
-    @Body() updateFoodDto: Partial<CreateFoodDto>,
+    @Body() updateFoodDto: UpdateFoodDto,
   ) {
     const db = this.firebaseService.getFirestore();
     const foodRef = db.collection('foods').doc(id);
@@ -76,6 +112,9 @@ export class AdminController {
 
   @Delete('foods/:id')
   @ApiOperation({ summary: 'Soft delete food entry' })
+  @ApiOkResponse({
+    schema: { example: { message: 'Food soft-deleted successfully' } },
+  })
   async deleteFood(@Param('id') id: string) {
     const db = this.firebaseService.getFirestore();
     const foodRef = db.collection('foods').doc(id);

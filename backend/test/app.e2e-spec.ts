@@ -44,6 +44,17 @@ describe('AppController (e2e)', () => {
       });
   });
 
+  it('/meta/nutrition-goals (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/meta/nutrition-goals')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.items.map((x: { key: string }) => x.key).sort()).toEqual(
+          ['BULKING', 'DIET', 'MAINTAIN'],
+        );
+      });
+  });
+
   it('/meta/locations/search (GET)', () => {
     return request(app.getHttpServer())
       .get('/meta/locations/search')

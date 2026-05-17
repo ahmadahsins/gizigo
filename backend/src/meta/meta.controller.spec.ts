@@ -23,6 +23,12 @@ describe('MetaController', () => {
     expect(res.items.length).toBe(3);
   });
 
+  it('nutrition-goals returns three goals', () => {
+    const res = controller.getNutritionGoals();
+    expect(res.items.length).toBe(3);
+    expect(res.items[0]).toHaveProperty('hint');
+  });
+
   it('locations search placeholder returns empty items', () => {
     const res = controller.searchLocations('ugm');
     expect(res.query).toBe('ugm');

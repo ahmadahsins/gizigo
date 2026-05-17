@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
 import { GetFoodsQueryDto } from './dto/get-foods-query.dto';
+import { RecommendationsQueryDto } from './dto/recommendations-query.dto';
+import { NutritionGrade } from '../common/enums/nutrition-grade.enum';
+import { NutritionGoal } from '../common/enums/nutrition-goal.enum';
 import * as geofire from 'geofire-common';
 
 const PLATFORM_KEYS = ['gofood', 'grabfood', 'shopeefood'] as const;
@@ -194,6 +197,198 @@ export class FoodsService {
       comparison_data: comparisonData ?? null,
       price_comparisons: this.buildPriceComparisons(comparisonData),
     };
+  }
+
+  /**
+   * Home hero + rail: uses `nutrition_goal`, `food_preferences`, optional GPS,
+   * and `nutritional_info` on foods when present.
+   */
+  async getRecommendations(uid: string, query: RecommendationsQueryDto) {
+    const db = this.firebaseService.getFirestore();
+    const userSnap = await db.collection('users').doc(uid).get();
+    const user = userSnap.data() ?? {};
+
+    const snapshot = await db
+      .collection('foods')
+      .where('is_available', '==', true)
+      .get();
+
+    let foods: Record<string, unknown>[] = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    const merchantsMap = await this.loadMerchantsMap(db, foods);
+
+    const hasUserLoc =
+      query.lat !== undefined &&
+      query.lng !== undefined &&
+      !Number.isNaN(query.lat) &&
+      !Number.isNaN(query.lng);
+
+    const center: [number, number] | null = hasUserLoc
+      ? [query.lat!, query.lng!]
+      : null;
+
+    foods = foods.map((food) => {
+      const mid = food['merchant_id'] as string | undefined;
+      const merchantDoc = mid ? merchantsMap[mid] : undefined;
+      let distance_in_km: number | undefined;
+      if (center && merchantDoc?.coordinates) {
+        const c = merchantDoc.coordinates as FirebaseFirestore.GeoPoint;
+        distance_in_km = geofire.distanceBetween(center, [
+          c.latitude,
+          c.longitude,
+        ]);
+      }
+      return {
+        ...food,
+        vendor_name: (merchantDoc?.name as string | undefined) ?? null,
+        image_url: food['photo_url'] ?? null,
+        distance_in_km,
+      };
+    });
+
+    const usePersonalization =
+      user['nutrition_goal'] != null ||
+      (Array.isArray(user['food_preferences']) &&
+        (user['food_preferences'] as unknown[]).length > 0);
+
+    const scored = foods.map((food) => {
+      const dist = food['distance_in_km'] as number | undefined;
+      const raw = usePersonalization
+        ? this.personalizationScore(food, user, dist)
+        : this.genericFoodScore(food, dist);
+
+      return {
+        ...food,
+        personalization_score: Math.round(raw * 100) / 100,
+      };
+    });
+
+    const sortedByScore = [...scored].sort(
+      (a, b) =>
+        (b['personalization_score'] as number) -
+        (a['personalization_score'] as number),
+    );
+
+    const featuredLimit = query.featured_limit ?? 1;
+    const recLimit = query.limit ?? 15;
+
+    const featured: Record<string, unknown>[] = [];
+    const used = new Set<string>();
+
+    if (featuredLimit > 0) {
+      for (const f of sortedByScore) {
+        if (featured.length >= featuredLimit) break;
+        if (f['is_featured'] !== true) continue;
+        const id = f['id'] as string;
+        if (!used.has(id)) {
+          featured.push(f);
+          used.add(id);
+        }
+      }
+      for (const f of sortedByScore) {
+        if (featured.length >= featuredLimit) break;
+        const id = f['id'] as string;
+        if (!used.has(id)) {
+          featured.push(f);
+          used.add(id);
+        }
+      }
+    }
+
+    const recommendations: Record<string, unknown>[] = [];
+    for (const f of sortedByScore) {
+      if (recommendations.length >= recLimit) break;
+      const id = f['id'] as string;
+      if (!used.has(id)) {
+        recommendations.push(f);
+        used.add(id);
+      }
+    }
+
+    return {
+      featured,
+      recommendations,
+      context: {
+        nutrition_goal: user['nutrition_goal'] ?? null,
+        onboarding_completed: Boolean(user['onboarding_completed']),
+        personalized: usePersonalization,
+      },
+    };
+  }
+
+  private genericFoodScore(
+    food: Record<string, unknown>,
+    distanceKm?: number,
+  ): number {
+    let score = Number(food['recommendation_score'] ?? 0);
+    score += this.tierBonus(food['nutrition_grade'] as string | undefined);
+    if (distanceKm != null && Number.isFinite(distanceKm)) {
+      score += Math.max(0, 12 - distanceKm) * 0.6;
+    }
+    return score;
+  }
+
+  private personalizationScore(
+    food: Record<string, unknown>,
+    user: FirebaseFirestore.DocumentData,
+    distanceKm?: number,
+  ): number {
+    const goal = user['nutrition_goal'] as string | undefined;
+    let score = Number(food['recommendation_score'] ?? 0);
+    score += this.tierBonus(food['nutrition_grade'] as string | undefined);
+
+    const ni = (food['nutritional_info'] as Record<string, number>) ?? {};
+
+    if (goal === NutritionGoal.DIET) {
+      if (ni.calories != null) {
+        score += Math.max(0, 650 - ni.calories) * 0.12;
+      }
+      if (ni.fat_g != null) {
+        score -= ni.fat_g * 0.9;
+      }
+      if (ni.protein_g != null) {
+        score += ni.protein_g * 0.35;
+      }
+    } else if (goal === NutritionGoal.BULKING) {
+      score += Number(ni.protein_g ?? 0) * 2.4;
+      if (ni.calories != null) {
+        score += ni.calories * 0.015;
+      }
+    } else {
+      score += Number(ni.protein_g ?? 0) * 0.55;
+      if (ni.calories != null) {
+        score -= Math.min(40, Math.abs(520 - ni.calories) * 0.04);
+      }
+    }
+
+    const prefs = user['food_preferences'] as string[] | undefined;
+    const labels = (food['health_labels'] as string[]) ?? [];
+    if (prefs?.length && labels.length) {
+      const lower = labels.map((l) => l.toLowerCase());
+      for (const p of prefs) {
+        const pl = p.toLowerCase().trim();
+        if (!pl) continue;
+        if (lower.some((l) => l.includes(pl) || pl.includes(l))) {
+          score += 20;
+        }
+      }
+    }
+
+    if (distanceKm != null && Number.isFinite(distanceKm)) {
+      score += Math.max(0, 12 - distanceKm) * 0.65;
+    }
+
+    return score;
+  }
+
+  private tierBonus(grade?: string): number {
+    if (grade === NutritionGrade.EXCELLENT) return 34;
+    if (grade === NutritionGrade.VERY_GOOD) return 22;
+    if (grade === NutritionGrade.GOOD) return 12;
+    return 0;
   }
 
   private buildPriceComparisons(comparisonData: Record<string, unknown> | null) {
