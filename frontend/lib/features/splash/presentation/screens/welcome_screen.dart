@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gizigo/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -17,31 +18,34 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   final List<Map<String, dynamic>> _onboardingData = [
     {
-      'image': 'assets/images/welcome-page-1.png',
+      'image': 'assets/images/welcome-page-1.svg',
       'title_1': 'Discover ',
       'title_green': 'Healthy',
       'title_2': ' Meals',
       'subtitle': 'Get personalized healthy food recommendations tailored to your needs, preferences, and daily lifestyle.',
       'bg_color': const Color(0xFFFAF1E6),
       'scale': 1.25,
+      'offset_y': 30.0,
     },
     {
-      'image': 'assets/images/welcome-page-2.png',
+      'image': 'assets/images/welcome-page-2.svg',
       'title_1': 'Compare & Save',
       'title_green': '',
       'title_2': '',
       'subtitle': 'Easily compare prices across multiple delivery apps in one place and choose the most affordable option.',
       'bg_color': const Color(0xFFDEE3E8),
       'scale': 1.0,
+      'offset_y': -20.0,
     },
     {
-      'image': 'assets/images/welcome-page-3.png',
+      'image': 'assets/images/welcome-page-3.svg',
       'title_1': 'Stay on Track',
       'title_green': '',
       'title_2': '',
       'subtitle': 'Track your daily healthy eating habits and build a consistent streak to support a better lifestyle over time.',
       'bg_color': const Color(0xFFDFF0F3),
       'scale': 1.25,
+      'offset_y': 30.0,
     },
   ];
 
@@ -98,8 +102,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   Container(
                     height: 48,
                     alignment: Alignment.centerLeft,
-                    child: Image.asset(
-                      'assets/images/Logo - Green.png',
+                    child: SvgPicture.asset(
+                      'assets/images/Logo - Green.svg',
                       height: 28,
                     ),
                   ),
@@ -142,13 +146,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   return Column(
                     children: [
                       Expanded(
-                        child: Transform.scale(
-                          scale: data['scale'] as double? ?? 1.0,
-                          alignment: Alignment.bottomCenter,
-                          child: Image.asset(
-                            data['image'] as String,
-                            fit: BoxFit.cover,
+                        child: Transform.translate(
+                          offset: Offset(0, data['offset_y'] as double? ?? 30.0),
+                          child: Transform.scale(
+                            scale: data['scale'] as double? ?? 1.0,
                             alignment: Alignment.bottomCenter,
+                            child: SvgPicture.asset(
+                              data['image'] as String,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.bottomCenter,
+                            ),
                           ),
                         ),
                       ),
