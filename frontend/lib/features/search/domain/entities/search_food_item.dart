@@ -4,6 +4,7 @@ class SearchFoodItem {
     required this.subtitle,
     required this.price,
     required this.ratingText,
+    required this.distanceKm,
     required this.imageUrl,
   });
 
@@ -11,5 +12,6 @@ class SearchFoodItem {
   final String subtitle;
   final String price;
   final String ratingText;
+  final double distanceKm;
   final String imageUrl;
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../router/app_router.dart';
 import '../../../home/presentation/widgets/custom_search_bar.dart';
 import '../../../home/presentation/widgets/recommendation_card.dart';
 
@@ -20,6 +22,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+
   late final TextEditingController _fullNameController;
   late final TextEditingController _emailController;
   late final TextEditingController _genderController;
@@ -109,6 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onBack: _handleBack,
                         onAccountTap: _openAccount,
                         onHistoryTap: _openHistory,
+                        onLogoutTap: _handleLogoutTap,
                       ),
                     },
                   ),
@@ -187,6 +192,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _isEditingAccount = false);
     }
   }
+
+  Future<void> _handleLogoutTap() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (context) => const _LogoutConfirmationDialog(),
+    );
+
+    if (!mounted || confirmed != true) return;
+
+    await _secureStorage.delete(key: 'firebase_id_token');
+
+    if (!mounted) return;
+    context.goNamed(AppRouter.login);
+  }
 }
 
 class _ProfileMenuContent extends StatelessWidget {
@@ -195,12 +215,14 @@ class _ProfileMenuContent extends StatelessWidget {
     required this.onBack,
     required this.onAccountTap,
     required this.onHistoryTap,
+    required this.onLogoutTap,
   });
 
   final String displayName;
   final VoidCallback onBack;
   final VoidCallback onAccountTap;
   final VoidCallback onHistoryTap;
+  final VoidCallback onLogoutTap;
 
   @override
   Widget build(BuildContext context) {
@@ -246,7 +268,7 @@ class _ProfileMenuContent extends StatelessWidget {
         _ProfileMenuTile(
           icon: Icons.logout_rounded,
           label: 'Logout',
-          onTap: () {},
+          onTap: onLogoutTap,
         ),
         const SizedBox(height: 37),
         const _SectionTitle('App References'),
@@ -276,6 +298,99 @@ class _ProfileMenuContent extends StatelessWidget {
           onTap: () {},
         ),
       ],
+    );
+  }
+}
+
+class _LogoutConfirmationDialog extends StatelessWidget {
+  const _LogoutConfirmationDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      backgroundColor: const Color(0xFFFAF7F7),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 37, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Are you sure want to\nlogout?',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.heading3.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF242424),
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 35),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFAF7F7),
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: AppTextStyles.button.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 17),
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 5,
+                          shadowColor: Colors.black.withValues(alpha: 0.28),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                        ),
+                        child: Text(
+                          'Logout',
+                          style: AppTextStyles.button.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

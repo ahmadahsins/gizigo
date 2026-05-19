@@ -12,11 +12,25 @@ class SearchResultsContent extends StatelessWidget {
     required this.horizontalPadding,
     required this.foods,
     required this.onFilterTap,
+    required this.onPriceFilterTap,
+    required this.onLabelFilterTap,
+    required this.onRangeFilterTap,
+    this.hasAnyFilter = false,
+    this.hasPriceFilter = false,
+    this.hasLabelFilter = false,
+    this.hasRangeFilter = false,
   });
 
   final double horizontalPadding;
   final List<SearchFoodItem> foods;
   final VoidCallback onFilterTap;
+  final VoidCallback onPriceFilterTap;
+  final VoidCallback onLabelFilterTap;
+  final VoidCallback onRangeFilterTap;
+  final bool hasAnyFilter;
+  final bool hasPriceFilter;
+  final bool hasLabelFilter;
+  final bool hasRangeFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +42,29 @@ class SearchResultsContent extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Row(
             children: [
-              FilterDropdownChip(label: 'Filters', onTap: onFilterTap),
+              FilterDropdownChip(
+                label: 'Filters',
+                onTap: onFilterTap,
+                isActive: hasAnyFilter,
+              ),
               const SizedBox(width: 12),
-              FilterDropdownChip(label: 'Price', onTap: onFilterTap),
+              FilterDropdownChip(
+                label: 'Price',
+                onTap: onPriceFilterTap,
+                isActive: hasPriceFilter,
+              ),
               const SizedBox(width: 12),
-              FilterDropdownChip(label: 'Label', onTap: onFilterTap),
+              FilterDropdownChip(
+                label: 'Label',
+                onTap: onLabelFilterTap,
+                isActive: hasLabelFilter,
+              ),
               const SizedBox(width: 12),
-              FilterDropdownChip(label: 'Range', onTap: onFilterTap),
+              FilterDropdownChip(
+                label: 'Range',
+                onTap: onRangeFilterTap,
+                isActive: hasRangeFilter,
+              ),
             ],
           ),
         ),

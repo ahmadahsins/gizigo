@@ -4,11 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 class FilterDropdownChip extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
+  final bool isActive;
 
   const FilterDropdownChip({
     super.key,
     required this.label,
     this.onTap,
+    this.isActive = false,
   });
 
   @override
@@ -18,9 +20,11 @@ class FilterDropdownChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isActive ? const Color(0xFFE8F4EA) : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE6E6E6)),
+          border: Border.all(
+            color: isActive ? const Color(0xFF1B6D24) : const Color(0xFFE6E6E6),
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -30,14 +34,18 @@ class FilterDropdownChip extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF333333),
+                color: isActive
+                    ? const Color(0xFF1B6D24)
+                    : const Color(0xFF333333),
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 20,
-              color: Color(0xFF666666),
+              color: isActive
+                  ? const Color(0xFF1B6D24)
+                  : const Color(0xFF666666),
             ),
           ],
         ),

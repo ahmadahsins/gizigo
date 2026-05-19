@@ -48,6 +48,7 @@ const SearchFoodItem featuredSearchFood = SearchFoodItem(
   subtitle: 'Warteg Sendowo',
   price: 'Rp17.000',
   ratingText: 'Excellent',
+  distanceKm: 1.4,
   imageUrl: searchFoodImageUrl,
 );
 
@@ -57,6 +58,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp16.000',
     ratingText: 'Excellent',
+    distanceKm: 1.2,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -64,6 +66,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp14.000',
     ratingText: 'Very good',
+    distanceKm: 2.4,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -71,6 +74,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp15.500',
     ratingText: 'Excellent',
+    distanceKm: 5.6,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -78,6 +82,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp16.000',
     ratingText: 'Good',
+    distanceKm: 1.8,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -85,6 +90,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp14.000',
     ratingText: 'Very good',
+    distanceKm: 3.7,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -92,6 +98,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp15.500',
     ratingText: 'Excellent',
+    distanceKm: 4.6,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -99,6 +106,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp14.000',
     ratingText: 'Good',
+    distanceKm: 6.3,
     imageUrl: searchFoodImageUrl,
   ),
   SearchFoodItem(
@@ -106,6 +114,7 @@ const List<SearchFoodItem> searchFoods = [
     subtitle: 'Ayam goreng',
     price: 'Rp16.000',
     ratingText: 'Very good',
+    distanceKm: 0.9,
     imageUrl: searchFoodImageUrl,
   ),
 ];
