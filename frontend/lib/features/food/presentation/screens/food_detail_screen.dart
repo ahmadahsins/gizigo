@@ -139,7 +139,7 @@ class FoodDetailScreen extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: GoogleFonts.plusJakartaSans(
+        style: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: AppColors.primary,
@@ -186,7 +186,7 @@ class FoodDetailScreen extends StatelessWidget {
               children: [
                 Text(
                   service,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
@@ -201,7 +201,7 @@ class FoodDetailScreen extends StatelessWidget {
           ),
           Text(
             price,
-            style: GoogleFonts.plusJakartaSans(
+            style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: color,

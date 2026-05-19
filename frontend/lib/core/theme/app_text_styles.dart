@@ -7,21 +7,21 @@ class AppTextStyles {
   AppTextStyles._();
 
   // Headings
-  static TextStyle heading1 = GoogleFonts.plusJakartaSans(
+  static TextStyle heading1 = GoogleFonts.lexend(
     fontSize: 28,
     fontWeight: FontWeight.w800,
     color: AppColors.textPrimary,
     height: 1.3,
   );
 
-  static TextStyle heading2 = GoogleFonts.plusJakartaSans(
+  static TextStyle heading2 = GoogleFonts.lexend(
     fontSize: 24,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     height: 1.3,
   );
 
-  static TextStyle heading3 = GoogleFonts.plusJakartaSans(
+  static TextStyle heading3 = GoogleFonts.lexend(
     fontSize: 20,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
@@ -29,21 +29,21 @@ class AppTextStyles {
   );
 
   // Body
-  static TextStyle bodyLarge = GoogleFonts.plusJakartaSans(
+  static TextStyle bodyLarge = GoogleFonts.inter(
     fontSize: 16,
     fontWeight: FontWeight.w400,
     color: AppColors.textPrimary,
     height: 1.5,
   );
 
-  static TextStyle bodyMedium = GoogleFonts.plusJakartaSans(
+  static TextStyle bodyMedium = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textPrimary,
     height: 1.5,
   );
 
-  static TextStyle bodySmall = GoogleFonts.plusJakartaSans(
+  static TextStyle bodySmall = GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
@@ -51,39 +51,39 @@ class AppTextStyles {
   );
 
   // Labels
-  static TextStyle labelLarge = GoogleFonts.plusJakartaSans(
+  static TextStyle labelLarge = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle labelMedium = GoogleFonts.plusJakartaSans(
+  static TextStyle labelMedium = GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w600,
     color: AppColors.textSecondary,
   );
 
-  static TextStyle labelSmall = GoogleFonts.plusJakartaSans(
+  static TextStyle labelSmall = GoogleFonts.inter(
     fontSize: 10,
     fontWeight: FontWeight.w500,
     color: AppColors.textHint,
   );
 
   // Button
-  static TextStyle button = GoogleFonts.plusJakartaSans(
+  static TextStyle button = GoogleFonts.inter(
     fontSize: 16,
     fontWeight: FontWeight.w600,
     color: Colors.white,
   );
 
   // Price
-  static TextStyle price = GoogleFonts.plusJakartaSans(
+  static TextStyle price = GoogleFonts.inter(
     fontSize: 18,
     fontWeight: FontWeight.w700,
     color: AppColors.primary,
   );
 
-  static TextStyle priceSmall = GoogleFonts.plusJakartaSans(
+  static TextStyle priceSmall = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w600,
     color: AppColors.primary,

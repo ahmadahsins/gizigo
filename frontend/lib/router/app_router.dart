@@ -8,7 +8,6 @@ import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/food/presentation/screens/food_detail_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
-import 'package:gizigo/core/widgets/main_scaffold.dart';
 
 /// App Router Configuration using go_router
 class AppRouter {
@@ -26,7 +25,6 @@ class AppRouter {
 
   // Navigator keys
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
-  static final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -93,29 +91,22 @@ class AppRouter {
         ),
       ),
 
-      // Main app with bottom navigation
-      ShellRoute(
-        navigatorKey: _shellNavigatorKey,
-        builder: (context, state, child) => MainScaffold(child: child),
-        routes: [
-          GoRoute(
-            path: '/',
-            name: home,
-            builder: (context, state) => const HomeScreen(),
-          ),
-          GoRoute(
-            path: '/search',
-            name: search,
-            builder: (context, state) => const SearchScreen(),
-          ),
-          GoRoute(
-            path: '/profile',
-            name: profile,
-            builder: (context, state) => const ProfileScreen(),
-          ),
-        ],
+      // Main app screens (no bottom nav)
+      GoRoute(
+        path: '/',
+        name: home,
+        builder: (context, state) => const HomeScreen(),
       ),
-
+      GoRoute(
+        path: '/search',
+        name: search,
+        builder: (context, state) => const SearchScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        name: profile,
+        builder: (context, state) => const ProfileScreen(),
+      ),
       // Food detail (full screen, no bottom nav)
       GoRoute(
         path: '/food/:id',
