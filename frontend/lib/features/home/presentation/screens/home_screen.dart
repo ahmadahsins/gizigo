@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../router/app_router.dart';
+import '../../../location/domain/entities/location_item.dart';
 import '../widgets/home_header.dart';
 import '../widgets/custom_search_bar.dart';
 import '../widgets/filter_dropdown_chip.dart';
@@ -8,8 +10,15 @@ import '../widgets/categories_section.dart';
 import '../widgets/featured_food_card.dart';
 import '../widgets/recommendation_card.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _locationName = 'UGM, Yogyakarta';
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +31,12 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header & Location Selector
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: HomeHeader(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: HomeHeader(
+                  locationName: _locationName,
+                  onLocationTap: _openLocationSelection,
+                ),
               ),
               const SizedBox(height: 24),
 
@@ -32,7 +44,7 @@ class HomeScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: CustomSearchBar(
-                  onTap: () => context.pushNamed('search'),
+                  onTap: () => context.pushNamed(AppRouter.search),
                 ),
               ),
               const SizedBox(height: 20),
@@ -117,5 +129,14 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openLocationSelection() async {
+    final selectedLocation = await context.pushNamed<LocationItem>(
+      AppRouter.selectLocation,
+    );
+    if (!mounted || selectedLocation == null) return;
+
+    setState(() => _locationName = selectedLocation.name);
   }
 }

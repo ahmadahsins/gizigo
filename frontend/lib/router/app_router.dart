@@ -6,6 +6,8 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/food/presentation/screens/food_detail_screen.dart';
+import '../../features/location/presentation/screens/select_location_map_screen.dart';
+import '../../features/location/presentation/screens/select_location_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 
@@ -20,6 +22,8 @@ class AppRouter {
   static const String register = 'register';
   static const String home = 'home';
   static const String search = 'search';
+  static const String selectLocation = 'select-location';
+  static const String selectLocationMap = 'select-location-map';
   static const String foodDetail = 'food-detail';
   static const String profile = 'profile';
 
@@ -62,7 +66,10 @@ class AppRouter {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
             const curve = Curves.ease;
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
             return SlideTransition(
               position: animation.drive(tween),
               child: child,
@@ -82,7 +89,10 @@ class AppRouter {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
             const curve = Curves.ease;
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
             return SlideTransition(
               position: animation.drive(tween),
               child: child,
@@ -101,6 +111,16 @@ class AppRouter {
         path: '/search',
         name: search,
         builder: (context, state) => const SearchScreen(),
+      ),
+      GoRoute(
+        path: '/select-location',
+        name: selectLocation,
+        builder: (context, state) => const SelectLocationScreen(),
+      ),
+      GoRoute(
+        path: '/select-location/map',
+        name: selectLocationMap,
+        builder: (context, state) => const SelectLocationMapScreen(),
       ),
       GoRoute(
         path: '/profile',

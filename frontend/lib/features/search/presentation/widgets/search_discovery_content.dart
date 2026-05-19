@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../auth/presentation/widgets/primary_button.dart';
-import '../../../home/presentation/widgets/rating_badge.dart';
+import '../../../home/presentation/widgets/featured_food_card.dart';
 import '../../domain/entities/search_category.dart';
 import '../../domain/entities/search_food_item.dart';
 import 'search_section_title.dart';
@@ -50,7 +49,13 @@ class SearchDiscoveryContent extends StatelessWidget {
           const SizedBox(height: 43),
           const SearchSectionTitle('You Might Like This'),
           const SizedBox(height: 17),
-          _FeaturedSearchCard(food: featuredFood),
+          FeaturedFoodCard(
+            imageUrl: featuredFood.imageUrl,
+            title: featuredFood.title,
+            merchant: featuredFood.subtitle,
+            price: featuredFood.price,
+            ratingText: featuredFood.ratingText,
+          ),
         ],
       ),
     );
@@ -192,131 +197,6 @@ class _CategoryCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FeaturedSearchCard extends StatelessWidget {
-  const _FeaturedSearchCard({required this.food});
-
-  final SearchFoodItem food;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE1E1E1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12),
-                ),
-                child: Image.network(
-                  food.imageUrl,
-                  height: 217,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const _ImageFallback(height: 217);
-                  },
-                ),
-              ),
-              Positioned(
-                top: 17,
-                right: 15,
-                child: RatingBadge(text: food.ratingText),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 17),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            food.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.heading3.copyWith(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              height: 1.15,
-                              color: const Color(0xFF202124),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            food.subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF202124),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      food.price,
-                      style: AppTextStyles.price.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 17),
-                PrimaryButton(text: 'View Full Menu', onPressed: () {}),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ImageFallback extends StatelessWidget {
-  const _ImageFallback({required this.height});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      width: double.infinity,
-      color: const Color(0xFFE9E9E9),
-      child: const Icon(
-        Icons.image_not_supported_rounded,
-        color: Color(0xFF9A9A9A),
-        size: 28,
       ),
     );
   }
