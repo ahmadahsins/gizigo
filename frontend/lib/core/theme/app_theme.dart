@@ -21,13 +21,13 @@ class AppTheme {
         onError: Colors.white,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      textTheme: GoogleFonts.plusJakartaSansTextTheme(),
+      textTheme: GoogleFonts.interTextTheme(),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.plusJakartaSans(
+        titleTextStyle: GoogleFonts.lexend(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -42,7 +42,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.plusJakartaSans(
+          textStyle: GoogleFonts.inter(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
@@ -78,7 +78,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: GoogleFonts.plusJakartaSans(
+        hintStyle: GoogleFonts.inter(
           color: AppColors.textHint,
           fontSize: 14,
         ),
@@ -93,7 +93,7 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.primaryLight.withValues(alpha: 0.15),
-        labelStyle: GoogleFonts.plusJakartaSans(
+        labelStyle: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: AppColors.primaryDark,
