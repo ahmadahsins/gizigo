@@ -82,6 +82,12 @@ Backend ini dikonfigurasi untuk deploy dari **root repository** ke Vercel sebaga
 
 4. Deploy — Vercel menjalankan `pnpm install` + `pnpm build` di folder `backend/`, lalu melayani request via `api/index.ts`
 
+**Catatan Vercel**
+
+- Pastikan **Node.js version = 20.x** di Vercel Dashboard → Settings → General (sesuai `engines` di root `package.json`)
+- `backend/pnpm-lock.yaml` **harus** di-commit ke Git (jangan di-ignore)
+- Install di Vercel memakai `npx pnpm@10.18.0` agar versi pnpm konsisten (menghindari error `ERR_INVALID_THIS`)
+
 **Verifikasi setelah deploy**
 
 ```bash
