@@ -89,7 +89,7 @@ Jika menggunakan Production Overrides, salin **persis** dari [`vercel.json`](../
 | Setting | Command |
 |---------|---------|
 | Install Command | `cd backend && npx --yes pnpm@10.18.0 install --frozen-lockfile` |
-| Build Command | `cd backend && pnpm run build && rm -rf ../api/backend-dist && mkdir -p ../api/backend-dist && cp -r dist ../api/backend-dist/dist && cp -r node_modules ../api/backend-dist/node_modules` |
+| Build Command | `cd backend && pnpm run build && rm -rf ../api/dist && cp -r dist ../api/dist && cp -r node_modules ../api/dist/node_modules && test -f ../api/dist/src/serverless.js` |
 | Output Directory | `public` |
 
 **Catatan Vercel**
@@ -113,9 +113,8 @@ Swagger UI tersedia di `https://<project>.vercel.app/api`
 **Troubleshooting error 500 (`FUNCTION_INVOCATION_FAILED`)**
 
 1. Cek **Runtime Logs** di Vercel Dashboard → Deployments → Logs
-2. `Cannot find module '.../serverless.js'` — build harus copy `backend/dist` ke `api/backend-dist/dist/` (sudah di `buildCommand`)
-3. `Cannot find module '@nestjs/...'` — build harus copy `backend/node_modules` ke `api/backend-dist/node_modules/` (sudah di `buildCommand`)
-4. `backend/node_modules does not exist` — **jangan** pakai `includeFiles: backend/node_modules/**` di `vercel.json`; gunakan copy di build command
+2. `Cannot find module '.../serverless.js'` — build copy ke `api/dist/` + `includeFiles: api/dist/**`
+3. `Cannot find module '@nestjs/...'` — `node_modules` harus ada di `api/dist/node_modules/` (sudah di build command)
 5. Pastikan environment variables Firebase sudah di-set untuk environment **Production**
 6. Format `FIREBASE_PRIVATE_KEY`: paste seluruh key dengan `\n` literal, contoh:
    `"-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"`

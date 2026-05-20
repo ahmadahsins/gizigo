@@ -1,0 +1,5 @@
+# Vercel build artifacts (generated locally or on CI)
+api/dist/
+api/backend-dist/
+api/_modules/
+api/node_modules/
