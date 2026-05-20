@@ -51,12 +51,12 @@ Repo ini bagian dari monorepo (`gizigo/`). Deploy backend dengan **Root Director
 #### 1. Buat / konfigurasi project
 
 1. Import repo di [vercel.com/new](https://vercel.com/new)
-2. **Settings → General → Root Directory** → `backend`
+2. **Settings → General → Root Directory** → ketik `backend` → **Save** (wajib — tanpa ini Vercel deploy repo root yang tidak punya `src/main.ts` → `NOT_FOUND`)
 3. **Settings → Build and Deployment**
-   - Framework Preset: auto-detect NestJS (atau `Other`)
-   - Matikan semua **Override** pada Install / Build / Output Command
-   - Output Directory: kosong (default)
-4. Konfigurasi build diatur oleh [`vercel.json`](vercel.json) — tidak perlu override manual
+   - Framework Preset: biarkan **auto-detect NestJS**
+   - **Jangan** set Override pada Install / Build / Output Command
+   - Output Directory: **kosong**
+4. [`vercel.json`](vercel.json) hanya mengatur install pnpm — **jangan** tambahkan `buildCommand` atau `framework: null` (itu mematikan deteksi NestJS)
 
 #### 2. Environment variables
 
@@ -94,10 +94,9 @@ vercel dev
 
 | Gejala | Penyebab & solusi |
 |--------|-------------------|
-| Build error `public` not found | Production override lama; pastikan [`public/.gitkeep`](public/.gitkeep) ada di repo |
-| `404 Not Found` di `/` | Vercel serve static saja; pastikan `vercel.json` **tidak** set `"framework": null` |
+| `NOT_FOUND` di semua route | Root Directory **bukan** `backend`, atau `buildCommand`/`framework: null` di `vercel.json` mematikan NestJS |
+| Build error `public` not found | Pastikan [`public/.gitkeep`](public/.gitkeep) ada di repo |
 | `500 FUNCTION_INVOCATION_FAILED` | Cek Runtime Logs; biasanya env Firebase belum di-set atau format private key salah |
-| Override tidak bisa diedit | Buat **project Vercel baru** (repo sama, Root Directory = `backend`) |
 
 > **Catatan:** Jangan deploy dari root repo (`gizigo/`). Pendekatan lama dengan folder `api/` + copy `node_modules` sudah tidak dipakai.
 

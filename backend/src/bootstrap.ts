@@ -1,13 +1,9 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+import helmet from 'helmet';
 
-export async function createApp(): Promise<INestApplication> {
-  const app = await NestFactory.create(AppModule);
-
+export async function configureApp(app: INestApplication): Promise<void> {
   app.use(helmet());
   app.enableCors();
 
@@ -37,7 +33,4 @@ export async function createApp(): Promise<INestApplication> {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
-
-  await app.init();
-  return app;
 }
