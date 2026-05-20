@@ -1,14 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "cd backend && npx --yes pnpm@10.18.0 install --frozen-lockfile",
+  "installCommand": "cd backend && npx --yes pnpm@10.18.0 install --frozen-lockfile && cd .. && ln -sf backend/node_modules node_modules",
   "buildCommand": "cd backend && pnpm run build",
   "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 30,
-      "memory": 1024
+      "memory": 1024,
+      "includeFiles": "backend/**"
     }
   }
 }

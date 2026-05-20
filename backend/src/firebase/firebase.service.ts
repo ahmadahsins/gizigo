@@ -13,7 +13,16 @@ export class FirebaseService implements OnModuleInit {
     const clientEmail = this.configService.get<string>('firebase.clientEmail');
     const privateKey = this.configService.get<string>('firebase.privateKey');
 
-    if (!admin.apps.length && projectId && clientEmail && privateKey) {
+    if (admin.apps.length) {
+      return;
+    }
+
+    if (!projectId || !clientEmail || !privateKey) {
+      this.logger.warn('Firebase Admin is not configured properly in .env');
+      return;
+    }
+
+    try {
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId,
@@ -22,8 +31,8 @@ export class FirebaseService implements OnModuleInit {
         }),
       });
       this.logger.log('Firebase Admin Initialized');
-    } else if (!admin.apps.length) {
-      this.logger.warn('Firebase Admin is not configured properly in .env');
+    } catch (error) {
+      this.logger.error('Firebase Admin failed to initialize', error);
     }
   }
 

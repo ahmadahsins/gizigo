@@ -100,6 +100,14 @@ curl https://<project>.vercel.app/meta/food-categories
 
 Swagger UI tersedia di `https://<project>.vercel.app/api`
 
+**Troubleshooting error 500 (`FUNCTION_INVOCATION_FAILED`)**
+
+1. Cek **Runtime Logs** di Vercel Dashboard → Deployments → Logs
+2. Pastikan environment variables Firebase sudah di-set untuk environment **Production**
+3. Format `FIREBASE_PRIVATE_KEY`: paste seluruh key dengan `\n` literal, contoh:
+   `"-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"`
+4. Redeploy setelah mengubah env vars
+
 **Update Flutter app**
 
 Setelah deploy, ubah `baseUrl` di `frontend/lib/core/constants/api_constants.dart` ke URL Vercel production.
