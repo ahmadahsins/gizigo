@@ -109,8 +109,8 @@ vercel dev
 
 | Gejala | Penyebab & solusi |
 |--------|-------------------|
-| `NOT_FOUND` di semua route | Root Directory bukan `backend`, atau folder `public/` ada (Vercel deploy static kosong) |
-| Build error `dist` not found | `includeFiles` — pastikan `pnpm run build` sukses sebelum bundle |
+| `NOT_FOUND` di semua route | Rewrites tidak aktif — pastikan [`vercel.json`](vercel.json) punya `"rewrites"` ke `/api` |
+| Build error `public` not found | Folder [`public/.gitkeep`](public/.gitkeep) wajib ada (Framework `Other` butuh output directory) |
 | `500 FUNCTION_INVOCATION_FAILED` | Cek Runtime Logs; biasanya env Firebase belum di-set |
 
 ### Platform alternatif
