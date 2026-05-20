@@ -59,16 +59,68 @@ $ pnpm run test:cov
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### Deploy ke Vercel (monorepo root)
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Backend ini dikonfigurasi untuk deploy dari **root repository** ke Vercel sebagai serverless function.
+
+**Prasyarat**
+
+- Akun Vercel + repo Git terhubung
+- Vercel CLI >= 48.4.0 (opsional, untuk `vercel dev`)
+
+**Langkah deploy**
+
+1. Import repo di [vercel.com/new](https://vercel.com/new)
+2. Biarkan **Root Directory kosong** (project root = repo root, bukan `backend/`)
+3. Set environment variables di Vercel Dashboard → Settings → Environment Variables:
+
+| Variable | Keterangan |
+|----------|------------|
+| `FIREBASE_PROJECT_ID` | Firebase project ID |
+| `FIREBASE_CLIENT_EMAIL` | Service account email |
+| `FIREBASE_PRIVATE_KEY` | Private key dengan literal `\n` (bukan newline nyata) |
+
+4. Deploy — Vercel menjalankan `pnpm install` + `pnpm build` di folder `backend/`, lalu melayani request via `api/index.ts`
+
+**Verifikasi setelah deploy**
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+curl https://<project>.vercel.app/
+curl https://<project>.vercel.app/meta/food-categories
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Swagger UI tersedia di `https://<project>.vercel.app/api`
+
+**Update Flutter app**
+
+Setelah deploy, ubah `baseUrl` di `frontend/lib/core/constants/api_constants.dart` ke URL Vercel production.
+
+**Arsitektur deploy**
+
+- `backend/src/bootstrap.ts` — konfigurasi NestJS (shared local + serverless)
+- `backend/src/serverless.ts` — handler Vercel dengan caching cold-start
+- `api/index.ts` — entry point Vercel di root repo
+- `vercel.json` — build command, rewrites, dan function limits
+
+**Local development**
+
+Tetap gunakan perintah NestJS standar dari folder `backend/`:
+
+```bash
+cd backend
+pnpm install
+pnpm run start:dev
+```
+
+Untuk simulasi Vercel lokal (dari repo root):
+
+```bash
+vercel dev
+```
+
+### Deployment lainnya
+
+When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
 ## Resources
 
