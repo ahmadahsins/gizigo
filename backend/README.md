@@ -103,10 +103,12 @@ Swagger UI tersedia di `https://<project>.vercel.app/api`
 **Troubleshooting error 500 (`FUNCTION_INVOCATION_FAILED`)**
 
 1. Cek **Runtime Logs** di Vercel Dashboard → Deployments → Logs
-2. Pastikan environment variables Firebase sudah di-set untuk environment **Production**
-3. Format `FIREBASE_PRIVATE_KEY`: paste seluruh key dengan `\n` literal, contoh:
+2. `Cannot find module '.../serverless.js'` — build harus copy `backend/dist` ke `api/backend-dist/` (sudah di `buildCommand`)
+3. `Cannot find module '@nestjs/...'` — install harus buat symlink `api/node_modules` → `backend/node_modules` (sudah di `installCommand`)
+4. Pastikan environment variables Firebase sudah di-set untuk environment **Production**
+5. Format `FIREBASE_PRIVATE_KEY`: paste seluruh key dengan `\n` literal, contoh:
    `"-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"`
-4. Redeploy setelah mengubah env vars
+6. Redeploy setelah mengubah env vars
 
 **Update Flutter app**
 
