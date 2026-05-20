@@ -59,81 +59,44 @@ $ pnpm run test:cov
 
 ## Deployment
 
-### Deploy ke Vercel (monorepo root)
+### Deploy ke Vercel (disarankan)
 
-Backend ini dikonfigurasi untuk deploy dari **root repository** ke Vercel sebagai serverless function.
+NestJS **bisa** di-deploy ke Vercel. Cara yang paling stabil: gunakan **Root Directory = `backend`**, bukan deploy dari root monorepo dengan folder `api/` custom.
 
-**Prasyarat**
+Vercel mendukung NestJS secara native sejak 2025 ([docs](https://vercel.com/docs/frameworks/backend/nestjs)) — `src/main.ts` langsung jadi satu serverless function, tanpa copy `node_modules` manual.
 
-- Akun Vercel + repo Git terhubung
-- Vercel CLI >= 48.4.0 (opsional, untuk `vercel dev`)
+**Setup Vercel (penting — ikuti persis)**
 
-**Langkah deploy**
-
-1. Import repo di [vercel.com/new](https://vercel.com/new)
-2. Biarkan **Root Directory kosong** (project root = repo root, bukan `backend/`)
-3. Set environment variables di Vercel Dashboard → Settings → Environment Variables:
+1. Buka project di Vercel → **Settings → General**
+2. Set **Root Directory** = `backend` → Save
+3. Buka **Settings → Build and Deployment**
+4. **Matikan semua Production Overrides** (Install Command, Build Command, Output Directory) — biarkan [`vercel.json`](vercel.json) yang mengatur
+5. **Framework Preset**: biarkan auto-detect NestJS, atau `Other`
+6. **Output Directory**: kosong / default (jangan `backend` atau `public`)
+7. Set environment variables di **Settings → Environment Variables**:
 
 | Variable | Keterangan |
 |----------|------------|
 | `FIREBASE_PROJECT_ID` | Firebase project ID |
 | `FIREBASE_CLIENT_EMAIL` | Service account email |
-| `FIREBASE_PRIVATE_KEY` | Private key dengan literal `\n` (bukan newline nyata) |
+| `FIREBASE_PRIVATE_KEY` | Private key dengan literal `\n` |
 
-4. Deploy — Vercel menjalankan `pnpm install` + `pnpm build` di folder `backend/`, lalu melayani request via `api/index.ts`
+8. Redeploy
 
-**Override commands di Vercel Dashboard (Opsi B)**
-
-Jika menggunakan Production Overrides, salin **persis** dari [`vercel.json`](../vercel.json):
-
-| Setting | Command |
-|---------|---------|
-| Install Command | `cd backend && npx --yes pnpm@10.18.0 install --frozen-lockfile` |
-| Build Command | `cd backend && pnpm run build && rm -rf ../api/dist && cp -r dist ../api/dist && cp -r node_modules ../api/dist/node_modules && test -f ../api/dist/src/serverless.js` |
-| Output Directory | `public` |
-
-**Catatan Vercel**
-
-- **Framework Preset**: otomatis `Other` via `"framework": null` di [`vercel.json`](../vercel.json). Jika masih error `public`, pastikan di dashboard **Build & Development Settings → Framework Preset = Other** dan **Output Directory = `public`** (atau kosong — `vercel.json` sudah override).
-- **Node.js version**: tidak perlu di-set manual di dashboard. Vercel membaca versi dari:
-  - [`package.json`](../package.json) → `"engines": { "node": "20.x" }`
-  - [`.node-version`](../.node-version) → `20`
-- `backend/pnpm-lock.yaml` **harus** di-commit ke Git (jangan di-ignore)
-- Install di Vercel memakai `npx pnpm@10.18.0` agar versi pnpm konsisten (menghindari error `ERR_INVALID_THIS`)
-
-**Verifikasi setelah deploy**
+**Verifikasi**
 
 ```bash
 curl https://<project>.vercel.app/
 curl https://<project>.vercel.app/meta/food-categories
 ```
 
-Swagger UI tersedia di `https://<project>.vercel.app/api`
-
-**Troubleshooting error 500 (`FUNCTION_INVOCATION_FAILED`)**
-
-1. Cek **Runtime Logs** di Vercel Dashboard → Deployments → Logs
-2. `Cannot find module '.../serverless.js'` — build copy ke `api/dist/` + `includeFiles: api/dist/**`
-3. `Cannot find module '@nestjs/...'` — `node_modules` harus ada di `api/dist/node_modules/` (sudah di build command)
-5. Pastikan environment variables Firebase sudah di-set untuk environment **Production**
-6. Format `FIREBASE_PRIVATE_KEY`: paste seluruh key dengan `\n` literal, contoh:
-   `"-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"`
-7. Redeploy setelah mengubah env vars
+Swagger UI: `https://<project>.vercel.app/api`
 
 **Update Flutter app**
 
-Setelah deploy, ubah `baseUrl` di `frontend/lib/core/constants/api_constants.dart` ke URL Vercel production.
-
-**Arsitektur deploy**
-
-- `backend/src/bootstrap.ts` — konfigurasi NestJS (shared local + serverless)
-- `backend/src/serverless.ts` — handler Vercel dengan caching cold-start
-- `api/index.ts` — entry point Vercel di root repo
-- `vercel.json` — build command, rewrites, dan function limits
+Ubah `baseUrl` di `frontend/lib/core/constants/api_constants.dart` ke URL Vercel production.
 
 **Local development**
-
-Tetap gunakan perintah NestJS standar dari folder `backend/`:
 
 ```bash
 cd backend
@@ -141,11 +104,29 @@ pnpm install
 pnpm run start:dev
 ```
 
-Untuk simulasi Vercel lokal (dari repo root):
+Simulasi Vercel lokal (dari folder `backend/`):
 
 ```bash
+cd backend
 vercel dev
 ```
+
+### Alternatif jika Vercel bermasalah
+
+Platform yang menjalankan NestJS sebagai **Node.js server biasa** (lebih sederhana, tanpa serverless adapter):
+
+| Platform | Keterangan |
+|----------|------------|
+| [Railway](https://railway.app) | Root: `backend`, start: `pnpm start:prod` |
+| [Render](https://render.com) | Root: `backend`, build: `pnpm build`, start: `node dist/main` |
+| [Fly.io](https://fly.io) | Docker atau `fly launch` di folder `backend` |
+
+Build command: `pnpm install && pnpm build`  
+Start command: `node dist/main`
+
+### Mengapa tidak deploy dari root monorepo?
+
+Deploy NestJS dari **root repo** (`gizigo/`) di Vercel membutuhkan workaround manual (copy dist, symlink node_modules, `includeFiles`, dll.) yang rapuh dan sering gagal. Root Directory = `backend` adalah pola resmi Vercel untuk monorepo — repo tetap monorepo, hanya **setting Vercel** yang menunjuk ke subfolder `backend/`.
 
 ### Deployment lainnya
 
