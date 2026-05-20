@@ -70,9 +70,9 @@ Vercel mendukung NestJS secara native sejak 2025 ([docs](https://vercel.com/docs
 1. Buka project di Vercel → **Settings → General**
 2. Set **Root Directory** = `backend` → Save
 3. Buka **Settings → Build and Deployment**
-4. **Matikan semua Production Overrides** (Install Command, Build Command, Output Directory) — biarkan [`vercel.json`](vercel.json) yang mengatur
+4. **Matikan semua Production Overrides** jika bisa (Install Command, Build Command, Output Directory)
 5. **Framework Preset**: biarkan auto-detect NestJS, atau `Other`
-6. **Output Directory**: kosong / default (jangan `backend` atau `public`)
+6. **Output Directory**: kosong / default — [`vercel.json`](vercel.json) sudah set `public` (folder kosong, hanya untuk satisfy Vercel static check)
 7. Set environment variables di **Settings → Environment Variables**:
 
 | Variable | Keterangan |
@@ -82,6 +82,14 @@ Vercel mendukung NestJS secara native sejak 2025 ([docs](https://vercel.com/docs
 | `FIREBASE_PRIVATE_KEY` | Private key dengan literal `\n` |
 
 8. Redeploy
+
+**Production Overrides tidak bisa diedit?**
+
+Override dari deploy lama (root monorepo) bisa "terkunci" di production deployment. Solusi:
+
+1. **Commit fix terbaru** — [`vercel.json`](vercel.json) + [`public/.gitkeep`](public/.gitkeep) sudah handle `outputDirectory: public`
+2. Atau buat **Vercel project baru** (import repo yang sama, Root Directory = `backend`) — paling bersih, tanpa override legacy
+3. Di Build Settings, toggle **Override** di baris Project Settings (bukan Production Overrides) — matikan satu per satu
 
 **Verifikasi**
 
