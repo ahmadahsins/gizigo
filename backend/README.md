@@ -46,17 +46,32 @@ Entry point: [`src/main.ts`](src/main.ts)
 
 ### Vercel
 
-Repo ini bagian dari monorepo (`gizigo/`). Deploy backend dengan **Root Directory = `backend`** — pola resmi Vercel untuk NestJS ([docs](https://vercel.com/docs/frameworks/backend/nestjs)).
+Repo ini bagian dari monorepo (`gizigo/`). Deploy dengan **Root Directory = `backend`**.
 
-#### 1. Buat / konfigurasi project
+NestJS dijalankan via [`api/index.js`](api/index.js) + rewrites (cocok dengan Framework Preset **Other** di Vercel). [`src/main.ts`](src/main.ts) tetap dipakai untuk development lokal.
+
+#### 1. Konfigurasi project
 
 1. Import repo di [vercel.com/new](https://vercel.com/new)
-2. **Settings → General → Root Directory** → ketik `backend` → **Save** (wajib — tanpa ini Vercel deploy repo root yang tidak punya `src/main.ts` → `NOT_FOUND`)
+2. **Settings → General → Root Directory** → `backend` → **Save**
 3. **Settings → Build and Deployment**
-   - Framework Preset: biarkan **auto-detect NestJS**
-   - **Jangan** set Override pada Install / Build / Output Command
+   - Framework Preset: **Other** (OK)
+   - Override Install / Build / Output: **OFF**
    - Output Directory: **kosong**
-4. [`vercel.json`](vercel.json) hanya mengatur install pnpm — **jangan** tambahkan `buildCommand` atau `framework: null` (itu mematikan deteksi NestJS)
+4. Build & routing diatur [`vercel.json`](vercel.json) — jangan override manual
+
+#### Arsitektur deploy
+
+```
+Request → Vercel rewrite → api/index.js → dist/src/serverless.js → NestJS
+```
+
+| File | Fungsi |
+|------|--------|
+| [`api/index.js`](api/index.js) | Entry point Vercel |
+| [`src/serverless.ts`](src/serverless.ts) | Handler serverless + cache cold-start |
+| [`src/main.ts`](src/main.ts) | Dev lokal (`pnpm start:dev`) |
+| [`vercel.json`](vercel.json) | Build, rewrites, function limits |
 
 #### 2. Environment variables
 
@@ -94,11 +109,9 @@ vercel dev
 
 | Gejala | Penyebab & solusi |
 |--------|-------------------|
-| `NOT_FOUND` di semua route | Root Directory **bukan** `backend`, atau `buildCommand`/`framework: null` di `vercel.json` mematikan NestJS |
-| Build error `public` not found | Pastikan [`public/.gitkeep`](public/.gitkeep) ada di repo |
-| `500 FUNCTION_INVOCATION_FAILED` | Cek Runtime Logs; biasanya env Firebase belum di-set atau format private key salah |
-
-> **Catatan:** Jangan deploy dari root repo (`gizigo/`). Pendekatan lama dengan folder `api/` + copy `node_modules` sudah tidak dipakai.
+| `NOT_FOUND` di semua route | Root Directory bukan `backend`, atau folder `public/` ada (Vercel deploy static kosong) |
+| Build error `dist` not found | `includeFiles` — pastikan `pnpm run build` sukses sebelum bundle |
+| `500 FUNCTION_INVOCATION_FAILED` | Cek Runtime Logs; biasanya env Firebase belum di-set |
 
 ### Platform alternatif
 
