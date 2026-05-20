@@ -1,14 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npx --yes pnpm@10.18.0 install --frozen-lockfile",
-  "buildCommand": "pnpm run build",
+  "buildCommand": "pnpm run build && rm -rf api/dist && cp -r dist api/dist && cp -r node_modules api/dist/node_modules",
   "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
-      "memory": 1024,
-      "includeFiles": "dist/**"
+      "memory": 1024
     }
   }
 }

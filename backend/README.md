@@ -71,7 +71,7 @@ Request → Vercel rewrite → api/index.js → dist/src/serverless.js → NestJ
 | [`api/index.js`](api/index.js) | Entry point Vercel |
 | [`src/serverless.ts`](src/serverless.ts) | Handler serverless + cache cold-start |
 | [`src/main.ts`](src/main.ts) | Dev lokal (`pnpm start:dev`) |
-| [`vercel.json`](vercel.json) | Build, rewrites, function limits |
+| [`vercel.json`](vercel.json) | Build (copy `dist` ke `api/dist/`), rewrites, function limits |
 
 #### 2. Environment variables
 
@@ -111,7 +111,7 @@ vercel dev
 |--------|-------------------|
 | `NOT_FOUND` di semua route | Rewrites tidak aktif — pastikan [`vercel.json`](vercel.json) punya `"rewrites"` ke `/api` |
 | Build error `public` not found | Folder [`public/.gitkeep`](public/.gitkeep) wajib ada (Framework `Other` butuh output directory) |
-| `500 FUNCTION_INVOCATION_FAILED` | Cek Runtime Logs; biasanya env Firebase belum di-set |
+| `500 FUNCTION_INVOCATION_FAILED` | Cek Runtime Logs; biasanya `dist/` tidak ter-bundle — build command harus copy ke `api/dist/` |
 
 ### Platform alternatif
 
