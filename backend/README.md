@@ -83,11 +83,28 @@ Vercel mendukung NestJS secara native sejak 2025 ([docs](https://vercel.com/docs
 
 8. Redeploy
 
-**Production Overrides tidak bisa diedit?**
+**API entry point & routes**
+
+Entry point NestJS: [`src/main.ts`](src/main.ts) — Vercel mendeteksinya otomatis (zero-config).
+
+Semua route berada di **root URL**, bukan di prefix `/api` Vercel:
+
+| URL | Keterangan |
+|-----|------------|
+| `GET /` | Health check → `Hello World!` |
+| `GET /meta/food-categories` | Public metadata |
+| `GET /meta/nutrition-grades` | Public metadata |
+| `POST /auth/signup` | Auth (butuh Firebase token) |
+| `GET /foods` | Foods (butuh Firebase token) |
+| `GET /api` | **Swagger UI** (dokumentasi interaktif) |
+
+> `/api` di sini = Swagger docs NestJS, **bukan** folder `api/` Vercel serverless.
+
+Jika `GET /` menampilkan **404 Not Found** (bukan 500): Vercel mungkin hanya serve folder `public/` static tanpa menjalankan NestJS. Pastikan **Production Override `framework: null` tidak aktif** dan [`vercel.json`](vercel.json) **tidak** set `"framework": null` atau `"outputDirectory": "public"`.
 
 Override dari deploy lama (root monorepo) bisa "terkunci" di production deployment. Solusi:
 
-1. **Commit fix terbaru** — [`vercel.json`](vercel.json) + [`public/.gitkeep`](public/.gitkeep) sudah handle `outputDirectory: public`
+1. **Commit fix terbaru** — [`vercel.json`](vercel.json) tanpa `framework: null` agar NestJS terdeteksi; [`public/.gitkeep`](public/.gitkeep) tetap ada jika override masih butuh folder `public`
 2. Atau buat **Vercel project baru** (import repo yang sama, Root Directory = `backend`) — paling bersih, tanpa override legacy
 3. Di Build Settings, toggle **Override** di baris Project Settings (bukan Production Overrides) — matikan satu per satu
 
