@@ -84,7 +84,10 @@ Backend ini dikonfigurasi untuk deploy dari **root repository** ke Vercel sebaga
 
 **Catatan Vercel**
 
-- Pastikan **Node.js version = 20.x** di Vercel Dashboard → Settings → General (sesuai `engines` di root `package.json`)
+- **Framework Preset**: otomatis `Other` via `"framework": null` di [`vercel.json`](../vercel.json). Jika masih error `public`, pastikan di dashboard **Build & Development Settings → Framework Preset = Other** dan **Output Directory = `public`** (atau kosong — `vercel.json` sudah override).
+- **Node.js version**: tidak perlu di-set manual di dashboard. Vercel membaca versi dari:
+  - [`package.json`](../package.json) → `"engines": { "node": "20.x" }`
+  - [`.node-version`](../.node-version) → `20`
 - `backend/pnpm-lock.yaml` **harus** di-commit ke Git (jangan di-ignore)
 - Install di Vercel memakai `npx pnpm@10.18.0` agar versi pnpm konsisten (menghindari error `ERR_INVALID_THIS`)
 
