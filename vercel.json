@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "cd backend && npx --yes pnpm@10.18.0 install --frozen-lockfile && cd .. && ln -sf backend/node_modules node_modules && ln -sf ../backend/node_modules api/node_modules",
-  "buildCommand": "cd backend && pnpm run build && cp -r dist ../api/backend-dist",
+  "installCommand": "cd backend && npx --yes pnpm@10.18.0 install --frozen-lockfile && cd .. && ln -sf backend/node_modules node_modules",
+  "buildCommand": "cd backend && pnpm run build && cp -r dist ../api/backend-dist && ln -sf ../../backend/node_modules ../api/backend-dist/node_modules",
   "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "functions": {
