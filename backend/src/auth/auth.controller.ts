@@ -1,18 +1,23 @@
-import { Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiTags,
-  ApiOperation,
+  ApiBody,
   ApiOkResponse,
+  ApiOperation,
+  ApiTags,
 } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from './firebase-auth.guard';
-import { FirebaseService } from '../firebase/firebase.service';
-import { AUTH_SYNC_RESPONSE_EXAMPLE } from '../swagger/api-examples';
+import {
+  AUTH_MERCHANT_SIGNUP_BODY_EXAMPLE,
+  AUTH_SYNC_RESPONSE_EXAMPLE,
+} from '../swagger/api-examples';
+import { AuthService } from './auth.service';
+import { AuthSyncDto } from './dto/auth-sync.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private firebaseService: FirebaseService) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post(['sync', 'signup'])
   @UseGuards(FirebaseAuthGuard)
@@ -20,33 +25,26 @@ export class AuthController {
   @ApiOperation({
     summary: 'Sync Firestore user after Firebase Auth (signup alias available)',
     description:
-      'Call with the Firebase ID token after `createUserWithEmailAndPassword` / Google sign-in. Creates `users/{uid}` on first success. `POST /auth/signup` uses the same handler as `POST /auth/sync`.',
+      'Call with the Firebase ID token after signup. First call may include `account_type` and `merchant` profile for merchant registration. `POST /auth/signup` uses the same handler as `POST /auth/sync`.',
+  })
+  @ApiBody({
+    type: AuthSyncDto,
+    examples: {
+      customer: { summary: 'Customer signup', value: {} },
+      merchant: {
+        summary: 'Merchant signup',
+        value: AUTH_MERCHANT_SIGNUP_BODY_EXAMPLE,
+      },
+    },
   })
   @ApiOkResponse({
     description: 'Sync OK',
     schema: { example: AUTH_SYNC_RESPONSE_EXAMPLE },
   })
-  async sync(@Req() req) {
-    const user = req.user;
-
-    const userRef = this.firebaseService
-      .getFirestore()
-      .collection('users')
-      .doc(user.uid);
-    const userDoc = await userRef.get();
-
-    if (!userDoc.exists) {
-      await userRef.set({
-        uid: user.uid,
-        name: user.name || 'Unknown',
-        email: user.email,
-        role: 'customer',
-        onboarding_completed: false,
-        food_preferences: [],
-        created_at: new Date(),
-      });
-    }
-
-    return { message: 'Synced successfully', uid: user.uid };
+  async sync(
+    @Req() req: { user: { uid: string; name?: string; email?: string } },
+    @Body() dto: AuthSyncDto,
+  ) {
+    return this.authService.sync(req.user, dto);
   }
 }

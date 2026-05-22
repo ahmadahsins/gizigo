@@ -169,6 +169,7 @@ export class UsersService {
       email: data.email ?? null,
       username: data.username ?? data.name ?? null,
       role: data.role ?? 'customer',
+      merchant_id: data.merchant_id ?? null,
       gender: data.gender ?? null,
       age: data.age ?? null,
       weight_kg: data.weight_kg ?? null,

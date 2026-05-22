@@ -9,6 +9,7 @@ import { FoodsModule } from './foods/foods.module';
 import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 import { MetaModule } from './meta/meta.module';
+import { MerchantModule } from './merchant/merchant.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { MetaModule } from './meta/meta.module';
     AuthModule,
     FoodsModule,
     AdminModule,
+    MerchantModule,
     UsersModule,
     MetaModule,
   ],
