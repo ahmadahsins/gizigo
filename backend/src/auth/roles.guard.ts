@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
 import { FirebaseService } from '../firebase/firebase.service';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -26,7 +27,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const user = request.user; // Set by FirebaseAuthGuard
+    const user = request.user;
 
     if (!user) {
       throw new ForbiddenException('User not authenticated');
@@ -43,9 +44,18 @@ export class RolesGuard implements CanActivate {
       }
 
       const userData = userDoc.data();
-      const userRole = userData?.role || 'customer';
+      const userRole = (userData?.role as UserRole) || UserRole.CUSTOMER;
 
       request['userRole'] = userRole;
+      request['merchantId'] = userData?.merchant_id ?? null;
+
+      if (
+        userRole === UserRole.MERCHANT &&
+        requiredRoles.includes(UserRole.MERCHANT) &&
+        !userData?.merchant_id
+      ) {
+        throw new ForbiddenException('Merchant account is missing merchant_id');
+      }
 
       if (!requiredRoles.includes(userRole)) {
         throw new ForbiddenException('Insufficient permissions');
@@ -53,6 +63,9 @@ export class RolesGuard implements CanActivate {
 
       return true;
     } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
       throw new ForbiddenException('Error checking roles');
     }
   }

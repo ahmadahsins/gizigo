@@ -8,6 +8,8 @@ export const SEED_MERCHANTS = [
     address: 'Jl. Margonda Raya No. 12, Depok',
     coordinates: { latitude: -6.3729, longitude: 106.8346 },
     is_verified: true,
+    is_active: true,
+    owner_uid: null,
   },
   {
     id: 'merchant_warung_sehat',
@@ -16,6 +18,8 @@ export const SEED_MERCHANTS = [
     address: 'Jl. Prof. Dr. Soepomo No. 45, Jakarta Selatan',
     coordinates: { latitude: -6.2435, longitude: 106.8444 },
     is_verified: true,
+    is_active: true,
+    owner_uid: null,
   },
   {
     id: 'merchant_warteg_makmur',
@@ -24,6 +28,8 @@ export const SEED_MERCHANTS = [
     address: 'Jl. Cikini Raya No. 8, Jakarta Pusat',
     coordinates: { latitude: -6.1944, longitude: 106.8381 },
     is_verified: false,
+    is_active: true,
+    owner_uid: null,
   },
 ] as const;
 

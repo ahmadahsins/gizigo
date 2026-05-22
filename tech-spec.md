@@ -37,6 +37,7 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 *   `username`: string (unique, opsional)
 *   `email`: string
 *   `role`: string (`customer`, `admin`, `merchant`)
+*   `merchant_id`: string (opsional; diisi untuk akun `merchant`, sama dengan ID dokumen `merchants`)
 *   `preferred_language`: string (opsional, mis. `en_US`)
 *   `dark_mode`: boolean (opsional; bisa juga hanya lokal di Flutter)
 *   **Onboarding / personalisasi (diset lewat `PATCH /users/me`):**
@@ -87,11 +88,13 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 ### D. Collection: `merchants`
 
 *   `merchant_id`: string (Primary Key konsisten dengan referensi di `foods`)
+*   `owner_uid`: string (opsional; Firebase Auth UID pemilik akun merchant)
 *   `name`: string (nama warung / vendor untuk UI)
 *   `address`: string
 *   `coordinates`: GeoPoint
 *   `geohash`: string (opsional; optimasi radius)
 *   `is_verified`: boolean
+*   `is_active`: boolean (default `true`; soft delete set `false`)
 
 ### E. Catatan query backend
 
@@ -109,8 +112,8 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 
 | Method | Path | Auth | Keterangan |
 | :--- | :--- | :--- | :--- |
-| POST | `/auth/sync` | Bearer | Sinkronisasi user ke `users/{uid}` jika belum ada (`role`: `customer`, `onboarding_completed`: `false`). |
-| POST | `/auth/signup` | Bearer | **Alias** handler yang sama dengan `/auth/sync` — panggil setelah Firebase `createUserWithEmailAndPassword` atau Google sign-up. |
+| POST | `/auth/sync` | Bearer | Sinkronisasi user ke `users/{uid}` jika belum ada. Body opsional: `account_type` (`customer` default, `merchant`) + objek `merchant` (wajib jika merchant). |
+| POST | `/auth/signup` | Bearer | **Alias** handler yang sama dengan `/auth/sync` — panggil setelah Firebase signup. Merchant signup satu langkah: kirim profil toko bersamaan. |
 
 ### 5.2 Meta (publik, tanpa token)
 
@@ -174,10 +177,27 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 | POST | `/users/me/recent-locations` | Body lokasi; menyimpan/refresh entri recent |
 | GET | `/users/me/recent-locations` | Daftar lokasi terbaru |
 
-### 5.5 Admin (Bearer + role `admin`)
+### 5.5 Merchant (Bearer + role `merchant`)
 
 | Method | Path | Keterangan |
 | :--- | :--- | :--- |
+| GET | `/merchant/me` | Profil toko merchant login |
+| PATCH | `/merchant/me` | Update nama, alamat, koordinat |
+| GET | `/merchant/foods` | Daftar menu milik merchant |
+| POST | `/merchant/foods` | Buat menu (tanpa `merchant_id`; field admin-only di-strip) |
+| PUT | `/merchant/foods/:id` | Update menu milik sendiri |
+| DELETE | `/merchant/foods/:id` | Soft delete menu milik sendiri |
+
+### 5.6 Admin (Bearer + role `admin`)
+
+| Method | Path | Keterangan |
+| :--- | :--- | :--- |
+| GET | `/admin/merchants` | List merchant (filter `is_active` opsional) |
+| GET | `/admin/merchants/:id` | Detail merchant |
+| POST | `/admin/merchants` | Buat merchant |
+| PUT | `/admin/merchants/:id` | Update merchant |
+| DELETE | `/admin/merchants/:id` | Soft delete merchant (`is_active: false`) |
+| GET | `/admin/merchants/:id/foods` | List foods per merchant |
 | POST | `/admin/foods` | Buat dokumen `foods` (lihat DTO; wajib `nutrition_grade`, `food_category`) |
 | PUT | `/admin/foods/:id` | Partial update |
 | DELETE | `/admin/foods/:id` | Soft delete (`is_available: false`) |

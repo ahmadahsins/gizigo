@@ -3,6 +3,58 @@
 export const AUTH_SYNC_RESPONSE_EXAMPLE = {
   message: 'Synced successfully',
   uid: 'firebaseUidExample123',
+  role: 'customer',
+  merchant_id: null,
+};
+
+export const AUTH_MERCHANT_SIGNUP_BODY_EXAMPLE = {
+  account_type: 'merchant',
+  merchant: {
+    name: 'Warteg Sendowo',
+    address: 'Jl. Margonda Raya No. 12, Depok',
+    lat: -6.3729,
+    lng: 106.8346,
+  },
+};
+
+export const MERCHANT_PROFILE_EXAMPLE = {
+  id: 'firebaseUidExample123',
+  merchant_id: 'firebaseUidExample123',
+  name: 'Warteg Sendowo',
+  address: 'Jl. Margonda Raya No. 12, Depok',
+  lat: -6.3729,
+  lng: 106.8346,
+  owner_uid: 'firebaseUidExample123',
+  is_verified: true,
+  is_active: true,
+  created_at: '2026-05-17T10:00:00.000Z',
+  updated_at: '2026-05-17T10:00:00.000Z',
+};
+
+export const ADMIN_CREATE_MERCHANT_BODY_EXAMPLE = {
+  name: 'Warung Sehat',
+  address: 'Jl. Prof. Dr. Soepomo No. 45, Jakarta Selatan',
+  lat: -6.2435,
+  lng: 106.8444,
+  owner_uid: 'firebaseUidExample456',
+};
+
+export const MERCHANT_CREATE_FOOD_BODY_EXAMPLE = {
+  name: 'Ayam goreng',
+  description: 'Ayam goreng renyah',
+  photo_url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+  nutrition_grade: 'EXCELLENT',
+  food_category: 'main_course',
+  health_labels: ['High Protein'],
+  base_price: 17000,
+  is_available: true,
+  nutritional_info: { calories: 420, protein_g: 32, fat_g: 20, carb_g: 28 },
+  comparison_data: {
+    gofood: {
+      price: 18000,
+      url: 'https://gofood.co.id/merchant/example',
+    },
+  },
 };
 
 export const USER_PROFILE_EXAMPLE = {
@@ -11,6 +63,7 @@ export const USER_PROFILE_EXAMPLE = {
   email: 'user@example.com',
   username: 'gizigang',
   role: 'customer',
+  merchant_id: null,
   gender: 'MALE',
   age: 21,
   weight_kg: 65,
