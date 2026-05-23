@@ -12,10 +12,11 @@ import '../../../../router/app_router.dart';
 import '../../data/models/profile_history_item.dart';
 import '../../data/models/profile_user.dart';
 import '../../data/profile_remote_data_source.dart';
+import '../widgets/food_preference_content.dart';
 import '../../../home/presentation/widgets/custom_search_bar.dart';
 import '../../../home/presentation/widgets/recommendation_card.dart';
 
-enum _ProfileView { menu, account, history }
+enum _ProfileView { menu, account, foodPreference, history }
 
 /// Profile Screen - User profile & settings
 class ProfileScreen extends StatefulWidget {
@@ -98,6 +99,8 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isFoodPreferenceView = _view == _ProfileView.foodPreference;
+
     return PopScope(
       canPop: _view == _ProfileView.menu,
       onPopInvokedWithResult: (didPop, result) {
@@ -121,43 +124,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   constraints: BoxConstraints(
                     minHeight: constraints.maxHeight - 61,
                   ),
-                  child: IntrinsicHeight(
-                    child: switch (_view) {
-                      _ProfileView.account => _AccountContent(
-                        isEditing: _isEditingAccount,
-                        isLoading: _isLoadingProfile,
-                        isSaving: _isSavingProfile,
-                        errorMessage: _profileError,
-                        fullNameController: _fullNameController,
-                        emailController: _emailController,
-                        genderController: _genderController,
-                        ageController: _ageController,
-                        heightController: _heightController,
-                        weightController: _weightController,
-                        onBack: _handleBack,
-                        onEdit: _enableAccountEditing,
-                        onEditPhoto: _handleEditPhoto,
-                        onSave: _saveAccountChanges,
-                        onDiscard: _discardAccountChanges,
-                        onGenderChanged: _setGender,
-                      ),
-                      _ProfileView.history => _HistoryContent(
-                        onBack: _handleBack,
-                        isLoading: _isLoadingHistory,
-                        errorMessage: _historyError,
-                        items: _historyItems,
-                        onRetry: _loadHistory,
-                      ),
-                      _ProfileView.menu => _ProfileMenuContent(
-                        displayName: _displayName,
-                        isLoading: _isLoadingProfile,
-                        onBack: _handleBack,
-                        onAccountTap: _openAccount,
-                        onHistoryTap: _openHistory,
-                        onLogoutTap: _handleLogoutTap,
-                      ),
-                    },
-                  ),
+                  child: isFoodPreferenceView
+                      ? FoodPreferenceContent(onBack: _handleBack)
+                      : IntrinsicHeight(child: _buildCurrentProfileView()),
                 ),
               );
             },
@@ -165,6 +134,46 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildCurrentProfileView() {
+    return switch (_view) {
+      _ProfileView.account => _AccountContent(
+        isEditing: _isEditingAccount,
+        isLoading: _isLoadingProfile,
+        isSaving: _isSavingProfile,
+        errorMessage: _profileError,
+        fullNameController: _fullNameController,
+        emailController: _emailController,
+        genderController: _genderController,
+        ageController: _ageController,
+        heightController: _heightController,
+        weightController: _weightController,
+        onBack: _handleBack,
+        onEdit: _enableAccountEditing,
+        onEditPhoto: _handleEditPhoto,
+        onSave: _saveAccountChanges,
+        onDiscard: _discardAccountChanges,
+        onGenderChanged: _setGender,
+      ),
+      _ProfileView.history => _HistoryContent(
+        onBack: _handleBack,
+        isLoading: _isLoadingHistory,
+        errorMessage: _historyError,
+        items: _historyItems,
+        onRetry: _loadHistory,
+      ),
+      _ProfileView.menu => _ProfileMenuContent(
+        displayName: _displayName,
+        isLoading: _isLoadingProfile,
+        onBack: _handleBack,
+        onAccountTap: _openAccount,
+        onFoodPreferenceTap: _openFoodPreference,
+        onHistoryTap: _openHistory,
+        onLogoutTap: _handleLogoutTap,
+      ),
+      _ProfileView.foodPreference => const SizedBox.shrink(),
+    };
   }
 
   String get _displayName {
@@ -189,6 +198,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       return;
     }
 
+    if (_view == _ProfileView.foodPreference) {
+      setState(() => _view = _ProfileView.menu);
+      return;
+    }
+
     if (context.canPop()) {
       context.pop();
       return;
@@ -199,6 +213,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   void _openAccount() {
     setState(() => _view = _ProfileView.account);
+  }
+
+  void _openFoodPreference() {
+    setState(() => _view = _ProfileView.foodPreference);
   }
 
   void _openHistory() {
@@ -465,6 +483,7 @@ class _ProfileMenuContent extends StatelessWidget {
     required this.isLoading,
     required this.onBack,
     required this.onAccountTap,
+    required this.onFoodPreferenceTap,
     required this.onHistoryTap,
     required this.onLogoutTap,
   });
@@ -473,6 +492,7 @@ class _ProfileMenuContent extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onBack;
   final VoidCallback onAccountTap;
+  final VoidCallback onFoodPreferenceTap;
   final VoidCallback onHistoryTap;
   final VoidCallback onLogoutTap;
 
@@ -519,7 +539,7 @@ class _ProfileMenuContent extends StatelessWidget {
         _ProfileMenuTile(
           icon: Icons.restaurant_outlined,
           label: 'Food Preference',
-          onTap: () {},
+          onTap: onFoodPreferenceTap,
         ),
         const SizedBox(height: 7),
         _ProfileMenuTile(
