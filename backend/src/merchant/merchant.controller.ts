@@ -75,7 +75,11 @@ export class MerchantController {
   }
 
   @Post('foods')
-  @ApiOperation({ summary: 'Create a food for the logged-in merchant' })
+  @ApiOperation({
+    summary: 'Create a food for the logged-in merchant',
+    description:
+      'Requires request-only `recipe`; generated nutrition is saved only when its grade is at least GOOD. The recipe is never saved.',
+  })
   @ApiBody({
     type: CreateMerchantFoodDto,
     examples: { default: { value: MERCHANT_CREATE_FOOD_BODY_EXAMPLE } },
@@ -84,14 +88,18 @@ export class MerchantController {
     @Req() req: { merchantId: string; userRole: UserRole },
     @Body() dto: CreateMerchantFoodDto,
   ) {
-    return this.foodsManagementService.createFood(
-      dto,
-      { role: req.userRole, merchantId: req.merchantId },
-    );
+    return this.foodsManagementService.createFood(dto, {
+      role: req.userRole,
+      merchantId: req.merchantId,
+    });
   }
 
   @Put('foods/:id')
-  @ApiOperation({ summary: 'Update a food owned by the logged-in merchant' })
+  @ApiOperation({
+    summary: 'Update a food owned by the logged-in merchant',
+    description:
+      'Send `recipe` only to refresh generated nutrition. Recipe ingredients are not persisted.',
+  })
   async updateFood(
     @Req() req: { merchantId: string; userRole: UserRole },
     @Param('id') id: string,
@@ -104,7 +112,9 @@ export class MerchantController {
   }
 
   @Delete('foods/:id')
-  @ApiOperation({ summary: 'Soft-delete a food owned by the logged-in merchant' })
+  @ApiOperation({
+    summary: 'Soft-delete a food owned by the logged-in merchant',
+  })
   async deleteFood(
     @Req() req: { merchantId: string; userRole: UserRole },
     @Param('id') id: string,

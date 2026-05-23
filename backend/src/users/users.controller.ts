@@ -70,7 +70,9 @@ export class UsersController {
   }
 
   @Post('me/recently-viewed')
-  @ApiOperation({ summary: 'Upsert a food into Recently viewed (call from detail screen)' })
+  @ApiOperation({
+    summary: 'Upsert a food into Recently viewed (call from detail screen)',
+  })
   async postRecentlyViewed(
     @Req() req: { user: { uid: string } },
     @Body() dto: RecordRecentlyViewedDto,
@@ -79,7 +81,9 @@ export class UsersController {
   }
 
   @Get('me/recently-viewed')
-  @ApiOperation({ summary: 'Paginated recently viewed foods with optional search' })
+  @ApiOperation({
+    summary: 'Paginated recently viewed foods with optional search',
+  })
   @ApiOkResponse({
     schema: { example: RECENTLY_VIEWED_RESPONSE_EXAMPLE },
   })

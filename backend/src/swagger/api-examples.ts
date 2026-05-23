@@ -43,12 +43,17 @@ export const MERCHANT_CREATE_FOOD_BODY_EXAMPLE = {
   name: 'Ayam goreng',
   description: 'Ayam goreng renyah',
   photo_url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
-  nutrition_grade: 'EXCELLENT',
   food_category: 'main_course',
   health_labels: ['High Protein'],
   base_price: 17000,
   is_available: true,
-  nutritional_info: { calories: 420, protein_g: 32, fat_g: 20, carb_g: 28 },
+  recipe: {
+    servings: 1,
+    ingredients: [
+      { name: 'dada ayam', amount: 150, unit: 'g' },
+      { name: 'minyak', amount: 1, unit: 'tsp' },
+    ],
+  },
   comparison_data: {
     gofood: {
       price: 18000,
@@ -70,6 +75,8 @@ export const USER_PROFILE_EXAMPLE = {
   height_cm: 170,
   nutrition_goal: 'DIET',
   food_preferences: ['High Protein', 'Low Calorie'],
+  dietary_restrictions: ['Halal'],
+  taste_profile: ['Savory', 'Spicy'],
   onboarding_completed: true,
   preferred_language: 'id_ID',
   dark_mode: false,
@@ -83,6 +90,8 @@ export const PATCH_USER_BODY_EXAMPLE = {
   height_cm: 165,
   nutrition_goal: 'BULKING',
   food_preferences: ['High Protein'],
+  dietary_restrictions: [],
+  taste_profile: ['Savory'],
   onboarding_completed: true,
 };
 
@@ -157,6 +166,7 @@ export const RECOMMENDATIONS_RESPONSE_EXAMPLE = {
     nutrition_goal: 'DIET',
     onboarding_completed: true,
     personalized: true,
+    recommendation_source: 'gemini',
   },
 };
 
@@ -164,7 +174,6 @@ export const ADMIN_CREATE_FOOD_BODY_EXAMPLE = {
   name: 'Ayam goreng',
   description: 'Ayam goreng renyah',
   photo_url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
-  nutrition_grade: 'EXCELLENT',
   food_category: 'main_course',
   health_labels: ['High Protein'],
   base_price: 17000,
@@ -172,7 +181,13 @@ export const ADMIN_CREATE_FOOD_BODY_EXAMPLE = {
   is_available: true,
   is_featured: true,
   recommendation_score: 85,
-  nutritional_info: { calories: 420, protein_g: 32, fat_g: 20, carb_g: 28 },
+  recipe: {
+    servings: 1,
+    ingredients: [
+      { name: 'dada ayam', amount: 150, unit: 'g' },
+      { name: 'minyak', amount: 1, unit: 'tsp' },
+    ],
+  },
   comparison_data: {
     gofood: {
       price: 18000,

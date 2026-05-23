@@ -1,18 +1,38 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { FoodsManagementService } from './foods-management.service';
 import { UserRole } from '../common/enums/user-role.enum';
 import { NutritionGrade } from '../common/enums/nutrition-grade.enum';
+import { RecipeUnit } from '../common/enums/recipe-unit.enum';
 
 describe('FoodsManagementService', () => {
   const baseFoodDto = {
     name: 'Ayam goreng',
     description: 'Crispy chicken',
     photo_url: 'https://example.com/food.jpg',
-    nutrition_grade: NutritionGrade.EXCELLENT,
     food_category: 'main_course',
     health_labels: ['High Protein'],
     base_price: 17000,
     is_available: true,
+    recipe: {
+      servings: 1,
+      ingredients: [{ name: 'chicken', amount: 150, unit: RecipeUnit.G }],
+    },
+  };
+  const acceptedAssessment = {
+    nutritional_info: {
+      calories: 420,
+      protein_g: 32,
+      fat_g: 20,
+      carb_g: 28,
+    },
+    grade: NutritionGrade.EXCELLENT,
+    accepted: true,
+    reason: 'Balanced protein-rich serving',
   };
 
   let foodRef: {
@@ -25,6 +45,7 @@ describe('FoodsManagementService', () => {
     doc: jest.Mock;
     where: jest.Mock;
   };
+  let analyzeRecipe: jest.Mock;
   let service: FoodsManagementService;
 
   beforeEach(() => {
@@ -57,26 +78,43 @@ describe('FoodsManagementService', () => {
         }),
       }),
     };
+    analyzeRecipe = jest.fn().mockResolvedValue(acceptedAssessment);
 
-    service = new FoodsManagementService(firebaseService as never);
+    service = new FoodsManagementService(
+      firebaseService as never,
+      {
+        analyzeRecipe,
+      } as never,
+    );
   });
 
-  it('creates food for merchant using logged-in merchant id', async () => {
+  it('creates food for merchant with generated nutrition and never stores recipe', async () => {
     const result = await service.createFood(baseFoodDto, {
       role: UserRole.MERCHANT,
       merchantId: 'merchant_a',
     });
 
-    expect(result.id).toBe('food1');
+    expect(analyzeRecipe).toHaveBeenCalledWith(baseFoodDto.recipe);
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'food1',
+        nutrition_grade: NutritionGrade.EXCELLENT,
+      }),
+    );
     expect(foodRef.set).toHaveBeenCalledWith(
       expect.objectContaining({
         merchant_id: 'merchant_a',
         food_id: 'food1',
+        nutrition_grade: NutritionGrade.EXCELLENT,
+        nutritional_info: acceptedAssessment.nutritional_info,
       }),
+    );
+    expect(foodRef.set).toHaveBeenCalledWith(
+      expect.not.objectContaining({ recipe: expect.anything() }),
     );
   });
 
-  it('creates food for admin with explicit merchant_id', async () => {
+  it('creates food for admin with explicit merchant id', async () => {
     await service.createFood(
       { ...baseFoodDto, merchant_id: 'merchant_b' },
       { role: UserRole.ADMIN },
@@ -85,6 +123,36 @@ describe('FoodsManagementService', () => {
     expect(foodRef.set).toHaveBeenCalledWith(
       expect.objectContaining({ merchant_id: 'merchant_b' }),
     );
+  });
+
+  it('rejects food below GOOD without writing it', async () => {
+    analyzeRecipe.mockResolvedValue({
+      ...acceptedAssessment,
+      grade: 'BELOW_GOOD',
+      accepted: false,
+    });
+
+    await expect(
+      service.createFood(baseFoodDto, {
+        role: UserRole.MERCHANT,
+        merchantId: 'merchant_a',
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(foodRef.set).not.toHaveBeenCalled();
+  });
+
+  it('does not write when Gemini analysis is unavailable', async () => {
+    analyzeRecipe.mockRejectedValue(
+      new ServiceUnavailableException('Nutrition analysis unavailable'),
+    );
+
+    await expect(
+      service.createFood(baseFoodDto, {
+        role: UserRole.MERCHANT,
+        merchantId: 'merchant_a',
+      }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(foodRef.set).not.toHaveBeenCalled();
   });
 
   it('blocks merchant from updating another merchants food', async () => {
@@ -102,7 +170,7 @@ describe('FoodsManagementService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('allows admin to update any food', async () => {
+  it('updates metadata without reanalyzing nutrition', async () => {
     foodRef.get.mockResolvedValue({
       exists: true,
       data: () => ({ merchant_id: 'merchant_b' }),
@@ -115,8 +183,33 @@ describe('FoodsManagementService', () => {
     );
 
     expect(result.message).toBe('Food updated successfully');
+    expect(analyzeRecipe).not.toHaveBeenCalled();
     expect(foodRef.update).toHaveBeenCalledWith(
       expect.objectContaining({ base_price: 18000, is_featured: true }),
+    );
+  });
+
+  it('reanalyzes an updated recipe but does not persist it', async () => {
+    foodRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ merchant_id: 'merchant_a' }),
+    });
+
+    await service.updateFood(
+      'food1',
+      { recipe: baseFoodDto.recipe },
+      { role: UserRole.MERCHANT, merchantId: 'merchant_a' },
+    );
+
+    expect(analyzeRecipe).toHaveBeenCalledWith(baseFoodDto.recipe);
+    expect(foodRef.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nutrition_grade: NutritionGrade.EXCELLENT,
+        nutritional_info: acceptedAssessment.nutritional_info,
+      }),
+    );
+    expect(foodRef.update).toHaveBeenCalledWith(
+      expect.not.objectContaining({ recipe: expect.anything() }),
     );
   });
 
@@ -138,9 +231,7 @@ describe('FoodsManagementService', () => {
     );
 
     expect(foodRef.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        base_price: 18000,
-      }),
+      expect.objectContaining({ base_price: 18000 }),
     );
     expect(foodRef.update).toHaveBeenCalledWith(
       expect.not.objectContaining({

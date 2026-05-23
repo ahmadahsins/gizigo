@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 
-export async function configureApp(app: INestApplication): Promise<void> {
+export function configureApp(app: INestApplication): void {
   app.use(helmet());
   app.enableCors();
 

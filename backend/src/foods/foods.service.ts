@@ -5,9 +5,20 @@ import { RecommendationsQueryDto } from './dto/recommendations-query.dto';
 import { NutritionGrade } from '../common/enums/nutrition-grade.enum';
 import { NutritionGoal } from '../common/enums/nutrition-goal.enum';
 import * as geofire from 'geofire-common';
+import { AiService } from '../ai/ai.service';
+import * as admin from 'firebase-admin';
 
 const PLATFORM_KEYS = ['gofood', 'grabfood', 'shopeefood'] as const;
 type PlatformKey = (typeof PLATFORM_KEYS)[number];
+type ScoredFood = Record<string, unknown> & { personalization_score: number };
+type StoredRecord = Record<string, unknown>;
+type PriceComparisonData = Partial<Record<PlatformKey, PlatformPrice>>;
+type PlatformPrice = {
+  price: number;
+  simulated_price?: number;
+  url: string;
+  icon_url?: string;
+};
 
 const PLATFORM_LABEL: Record<PlatformKey, string> = {
   gofood: 'GoFood',
@@ -17,7 +28,10 @@ const PLATFORM_LABEL: Record<PlatformKey, string> = {
 
 @Injectable()
 export class FoodsService {
-  constructor(private firebaseService: FirebaseService) {}
+  constructor(
+    private firebaseService: FirebaseService,
+    private readonly aiService: AiService,
+  ) {}
 
   async getFoods(query: GetFoodsQueryDto) {
     const db = this.firebaseService.getFirestore();
@@ -29,10 +43,9 @@ export class FoodsService {
       .where('is_available', '==', true)
       .get();
 
-    let foods: Record<string, unknown>[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    let foods: Record<string, unknown>[] = snapshot.docs.map((doc) =>
+      this.publicStoredFood(doc.id, doc.data()),
+    );
 
     if (query.featured_only === true) {
       foods = foods.filter((f) => f['is_featured'] === true);
@@ -45,9 +58,9 @@ export class FoodsService {
       const merchantDoc = mid ? merchantsMap[mid] : undefined;
       return {
         ...food,
-        vendor_name: (merchantDoc?.name as string | undefined) ?? null,
+        vendor_name: this.stringOrNull(merchantDoc?.['name']),
         image_url: food['photo_url'] ?? null,
-        merchant_coordinates: merchantDoc?.coordinates ?? null,
+        merchant_coordinates: this.readGeoPoint(merchantDoc?.['coordinates']),
       };
     });
 
@@ -55,9 +68,8 @@ export class FoodsService {
       const term = query.q.toLowerCase();
       foods = foods.filter(
         (f) =>
-          (f['name'] && String(f['name']).toLowerCase().includes(term)) ||
-          (f['description'] &&
-            String(f['description']).toLowerCase().includes(term)),
+          this.matchesText(f['name'], term) ||
+          this.matchesText(f['description'], term),
       );
     }
 
@@ -72,37 +84,31 @@ export class FoodsService {
     }
 
     if (query.min_price !== undefined) {
-      foods = foods.filter(
-        (f) => Number(f['base_price']) >= query.min_price!,
-      );
+      foods = foods.filter((f) => Number(f['base_price']) >= query.min_price!);
     }
     if (query.max_price !== undefined) {
-      foods = foods.filter(
-        (f) => Number(f['base_price']) <= query.max_price!,
-      );
+      foods = foods.filter((f) => Number(f['base_price']) <= query.max_price!);
     }
 
-    const hasUserLoc =
+    const center: [number, number] | null =
       query.lat !== undefined &&
       query.lng !== undefined &&
       !Number.isNaN(query.lat) &&
-      !Number.isNaN(query.lng);
+      !Number.isNaN(query.lng)
+        ? [query.lat, query.lng]
+        : null;
+    const hasUserLoc = center !== null;
 
-    if (hasUserLoc) {
-      const center: [number, number] = [query.lat!, query.lng!];
+    if (center) {
       foods = foods.map((food) => {
-        const coords = food['merchant_coordinates'] as
-          | FirebaseFirestore.GeoPoint
-          | undefined;
+        const coords = this.readGeoPoint(food['merchant_coordinates']);
         let distance_in_km = Number.POSITIVE_INFINITY;
         if (coords) {
           const mLoc: [number, number] = [coords.latitude, coords.longitude];
           distance_in_km = geofire.distanceBetween(center, mLoc);
         }
-        const { merchant_coordinates: _, ...rest } = food as Record<
-          string,
-          unknown
-        >;
+        const rest = { ...food };
+        delete rest['merchant_coordinates'];
         return { ...rest, distance_in_km };
       });
 
@@ -113,16 +119,13 @@ export class FoodsService {
       }
     } else {
       foods = foods.map((food) => {
-        const { merchant_coordinates: _, ...rest } = food as Record<
-          string,
-          unknown
-        >;
+        const rest = { ...food };
+        delete rest['merchant_coordinates'];
         return rest;
       });
     }
 
-    const sort =
-      query.sort ?? (hasUserLoc ? 'distance' : 'recommended');
+    const sort = query.sort ?? (hasUserLoc ? 'distance' : 'recommended');
 
     if (sort === 'distance' && hasUserLoc) {
       foods.sort(
@@ -167,10 +170,11 @@ export class FoodsService {
       throw new NotFoundException('Food data is empty');
     }
 
-    let comparisonData = foodData.comparison_data;
+    const safeFoodData = this.toRecord(foodData);
+    const comparisonData = this.readComparisonData(
+      safeFoodData['comparison_data'],
+    );
     if (comparisonData) {
-      comparisonData = JSON.parse(JSON.stringify(comparisonData));
-
       PLATFORM_KEYS.forEach((provider) => {
         if (comparisonData[provider]?.price != null) {
           const fluctuation = Math.random() * 0.1 - 0.05;
@@ -183,76 +187,71 @@ export class FoodsService {
     }
 
     const merchantsMap = await this.loadMerchantsMap(db, [
-      { merchant_id: foodData.merchant_id },
+      { merchant_id: safeFoodData['merchant_id'] },
     ]);
-    const mid = foodData.merchant_id as string | undefined;
+    const mid = this.optionalString(safeFoodData['merchant_id']);
     const merchantDoc = mid ? merchantsMap[mid] : undefined;
-    const vendor_name = (merchantDoc?.name as string | undefined) ?? null;
+    const vendor_name = this.stringOrNull(merchantDoc?.['name']);
 
+    delete safeFoodData['recipe'];
     return {
       id: doc.id,
-      ...foodData,
+      ...safeFoodData,
       vendor_name,
-      image_url: foodData.photo_url ?? null,
+      image_url: safeFoodData['photo_url'] ?? null,
       comparison_data: comparisonData ?? null,
       price_comparisons: this.buildPriceComparisons(comparisonData),
     };
   }
 
   /**
-   * Home hero + rail: uses `nutrition_goal`, `food_preferences`, optional GPS,
-   * and `nutritional_info` on foods when present.
+   * Home hero + rail: Gemini ranks available foods when profile context exists,
+   * while the local score remains a resilient fallback.
    */
   async getRecommendations(uid: string, query: RecommendationsQueryDto) {
     const db = this.firebaseService.getFirestore();
     const userSnap = await db.collection('users').doc(uid).get();
-    const user = userSnap.data() ?? {};
+    const user = this.toRecord(userSnap.data());
 
     const snapshot = await db
       .collection('foods')
       .where('is_available', '==', true)
       .get();
 
-    let foods: Record<string, unknown>[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    let foods: Record<string, unknown>[] = snapshot.docs.map((doc) =>
+      this.publicStoredFood(doc.id, doc.data()),
+    );
 
     const merchantsMap = await this.loadMerchantsMap(db, foods);
 
-    const hasUserLoc =
+    const center: [number, number] | null =
       query.lat !== undefined &&
       query.lng !== undefined &&
       !Number.isNaN(query.lat) &&
-      !Number.isNaN(query.lng);
-
-    const center: [number, number] | null = hasUserLoc
-      ? [query.lat!, query.lng!]
-      : null;
+      !Number.isNaN(query.lng)
+        ? [query.lat, query.lng]
+        : null;
 
     foods = foods.map((food) => {
       const mid = food['merchant_id'] as string | undefined;
       const merchantDoc = mid ? merchantsMap[mid] : undefined;
       let distance_in_km: number | undefined;
-      if (center && merchantDoc?.coordinates) {
-        const c = merchantDoc.coordinates as FirebaseFirestore.GeoPoint;
+      const coordinates = this.readGeoPoint(merchantDoc?.['coordinates']);
+      if (center && coordinates) {
         distance_in_km = geofire.distanceBetween(center, [
-          c.latitude,
-          c.longitude,
+          coordinates.latitude,
+          coordinates.longitude,
         ]);
       }
       return {
         ...food,
-        vendor_name: (merchantDoc?.name as string | undefined) ?? null,
+        vendor_name: this.stringOrNull(merchantDoc?.['name']),
         image_url: food['photo_url'] ?? null,
         distance_in_km,
       };
     });
 
-    const usePersonalization =
-      user['nutrition_goal'] != null ||
-      (Array.isArray(user['food_preferences']) &&
-        (user['food_preferences'] as unknown[]).length > 0);
+    const usePersonalization = this.hasPersonalizationProfile(user);
 
     const scored = foods.map((food) => {
       const dist = food['distance_in_km'] as number | undefined;
@@ -266,11 +265,35 @@ export class FoodsService {
       };
     });
 
-    const sortedByScore = [...scored].sort(
-      (a, b) =>
-        (b['personalization_score'] as number) -
-        (a['personalization_score'] as number),
+    const locallySorted = [...scored].sort(
+      (a, b) => b.personalization_score - a.personalization_score,
     );
+    let sortedByScore = locallySorted;
+    let recommendationSource: 'gemini' | 'fallback' = 'fallback';
+
+    if (usePersonalization && foods.length > 0) {
+      try {
+        const aiOrder = await this.aiService.rankFoodsForUser(
+          this.recommendationUserProfile(user),
+          foods.map((food) => ({
+            id: food['id'] as string,
+            name: food['name'],
+            description: food['description'],
+            nutrition_grade: food['nutrition_grade'],
+            food_category: food['food_category'],
+            health_labels: food['health_labels'],
+            nutritional_info: food['nutritional_info'],
+          })),
+        );
+        const aiSorted = this.mergeAiRanking(aiOrder, locallySorted);
+        if (aiSorted) {
+          sortedByScore = aiSorted;
+          recommendationSource = 'gemini';
+        }
+      } catch {
+        recommendationSource = 'fallback';
+      }
+    }
 
     const featuredLimit = query.featured_limit ?? 1;
     const recLimit = query.limit ?? 15;
@@ -315,8 +338,69 @@ export class FoodsService {
         nutrition_goal: user['nutrition_goal'] ?? null,
         onboarding_completed: Boolean(user['onboarding_completed']),
         personalized: usePersonalization,
+        recommendation_source: recommendationSource,
       },
     };
+  }
+
+  private hasPersonalizationProfile(user: StoredRecord): boolean {
+    const scalarFields = [
+      'gender',
+      'age',
+      'weight_kg',
+      'height_cm',
+      'nutrition_goal',
+    ];
+    const arrayFields = [
+      'food_preferences',
+      'dietary_restrictions',
+      'taste_profile',
+    ];
+    return (
+      scalarFields.some((field) => user[field] != null) ||
+      arrayFields.some(
+        (field) => Array.isArray(user[field]) && user[field].length > 0,
+      )
+    );
+  }
+
+  private recommendationUserProfile(user: StoredRecord) {
+    return {
+      gender: user['gender'] ?? null,
+      age: user['age'] ?? null,
+      weight_kg: user['weight_kg'] ?? null,
+      height_cm: user['height_cm'] ?? null,
+      nutrition_goal: user['nutrition_goal'] ?? null,
+      food_preferences: user['food_preferences'] ?? [],
+      dietary_restrictions: user['dietary_restrictions'] ?? [],
+      taste_profile: user['taste_profile'] ?? [],
+    };
+  }
+
+  private mergeAiRanking(
+    orderedIds: string[],
+    locallySorted: ScoredFood[],
+  ): ScoredFood[] | null {
+    const byId = new Map(
+      locallySorted.map((food) => [food['id'] as string, food]),
+    );
+    const used = new Set<string>();
+    const ranked: ScoredFood[] = [];
+
+    for (const id of orderedIds) {
+      const food = byId.get(id);
+      if (food && !used.has(id)) {
+        ranked.push(food);
+        used.add(id);
+      }
+    }
+    if (ranked.length === 0) return null;
+
+    for (const food of locallySorted) {
+      const id = food['id'] as string;
+      if (!used.has(id)) ranked.push(food);
+    }
+    return ranked;
   }
 
   private genericFoodScore(
@@ -331,9 +415,18 @@ export class FoodsService {
     return score;
   }
 
+  private publicStoredFood(
+    id: string,
+    value: unknown,
+  ): Record<string, unknown> {
+    const safeFood = this.toRecord(value);
+    delete safeFood['recipe'];
+    return { id, ...safeFood };
+  }
+
   private personalizationScore(
     food: Record<string, unknown>,
-    user: FirebaseFirestore.DocumentData,
+    user: StoredRecord,
     distanceKm?: number,
   ): number {
     const goal = user['nutrition_goal'] as string | undefined;
@@ -391,7 +484,7 @@ export class FoodsService {
     return 0;
   }
 
-  private buildPriceComparisons(comparisonData: Record<string, unknown> | null) {
+  private buildPriceComparisons(comparisonData: PriceComparisonData | null) {
     if (!comparisonData) return [];
     const rows: Array<{
       platform_key: PlatformKey;
@@ -403,14 +496,7 @@ export class FoodsService {
     }> = [];
 
     for (const key of PLATFORM_KEYS) {
-      const row = comparisonData[key] as
-        | {
-            price: number;
-            simulated_price?: number;
-            url: string;
-            icon_url?: string;
-          }
-        | undefined;
+      const row = comparisonData[key];
       if (row?.price != null) {
         rows.push({
           platform_key: key,
@@ -428,13 +514,13 @@ export class FoodsService {
   private async loadMerchantsMap(
     db: FirebaseFirestore.Firestore,
     foods: Record<string, unknown>[],
-  ): Promise<Record<string, FirebaseFirestore.DocumentData>> {
+  ): Promise<Record<string, StoredRecord>> {
     const merchantIds = [
       ...new Set(
         foods.map((f) => f['merchant_id']).filter(Boolean) as string[],
       ),
     ];
-    const merchantsMap: Record<string, FirebaseFirestore.DocumentData> = {};
+    const merchantsMap: Record<string, StoredRecord> = {};
     if (merchantIds.length === 0) return merchantsMap;
 
     for (let i = 0; i < merchantIds.length; i += 10) {
@@ -444,9 +530,51 @@ export class FoodsService {
         .where('merchant_id', 'in', chunk)
         .get();
       merchantsSnapshot.forEach((doc) => {
-        merchantsMap[doc.data().merchant_id] = doc.data();
+        const merchant = this.toRecord(doc.data());
+        const merchantId = this.optionalString(merchant['merchant_id']);
+        if (merchantId) merchantsMap[merchantId] = merchant;
       });
     }
     return merchantsMap;
+  }
+
+  private toRecord(value: unknown): StoredRecord {
+    return value !== null && typeof value === 'object'
+      ? { ...(value as StoredRecord) }
+      : {};
+  }
+
+  private optionalString(value: unknown): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  private stringOrNull(value: unknown): string | null {
+    return this.optionalString(value) ?? null;
+  }
+
+  private matchesText(value: unknown, term: string): boolean {
+    return typeof value === 'string' && value.toLowerCase().includes(term);
+  }
+
+  private readGeoPoint(value: unknown): FirebaseFirestore.GeoPoint | undefined {
+    return value instanceof admin.firestore.GeoPoint ? value : undefined;
+  }
+
+  private readComparisonData(value: unknown): PriceComparisonData | null {
+    const raw = this.toRecord(value);
+    const data: PriceComparisonData = {};
+    for (const key of PLATFORM_KEYS) {
+      const row = this.toRecord(raw[key]);
+      const price = row['price'];
+      const url = row['url'];
+      if (typeof price === 'number' && typeof url === 'string') {
+        data[key] = {
+          price,
+          url,
+          icon_url: this.optionalString(row['icon_url']),
+        };
+      }
+    }
+    return Object.keys(data).length ? data : null;
   }
 }

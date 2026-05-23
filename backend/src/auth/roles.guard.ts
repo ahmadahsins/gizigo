@@ -8,6 +8,12 @@ import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
 import { FirebaseService } from '../firebase/firebase.service';
 import { UserRole } from '../common/enums/user-role.enum';
+import { AuthenticatedRequest } from './firebase-auth.guard';
+
+type AuthorizedRequest = AuthenticatedRequest & {
+  userRole?: UserRole;
+  merchantId?: string | null;
+};
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -26,7 +32,7 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthorizedRequest>();
     const user = request.user;
 
     if (!user) {
@@ -43,16 +49,26 @@ export class RolesGuard implements CanActivate {
         throw new ForbiddenException('User not found in database');
       }
 
-      const userData = userDoc.data();
-      const userRole = (userData?.role as UserRole) || UserRole.CUSTOMER;
+      const userData = (userDoc.data() ?? {}) as unknown as Record<
+        string,
+        unknown
+      >;
+      const roleValue = userData['role'];
+      const userRole = Object.values(UserRole).includes(roleValue as UserRole)
+        ? (roleValue as UserRole)
+        : UserRole.CUSTOMER;
+      const merchantId =
+        typeof userData['merchant_id'] === 'string'
+          ? userData['merchant_id']
+          : null;
 
-      request['userRole'] = userRole;
-      request['merchantId'] = userData?.merchant_id ?? null;
+      request.userRole = userRole;
+      request.merchantId = merchantId;
 
       if (
         userRole === UserRole.MERCHANT &&
         requiredRoles.includes(UserRole.MERCHANT) &&
-        !userData?.merchant_id
+        !merchantId
       ) {
         throw new ForbiddenException('Merchant account is missing merchant_id');
       }

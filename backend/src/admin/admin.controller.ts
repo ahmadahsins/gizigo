@@ -29,13 +29,15 @@ import { UpdateFoodDto } from './dto/update-food.dto';
 @Roles(UserRole.ADMIN)
 @ApiBearerAuth()
 export class AdminController {
-  constructor(private readonly foodsManagementService: FoodsManagementService) {}
+  constructor(
+    private readonly foodsManagementService: FoodsManagementService,
+  ) {}
 
   @Post('foods')
   @ApiOperation({
     summary: 'Create new food entry',
     description:
-      'Persist `nutrition_grade`, `food_category`, optional `nutritional_info` for recommendations.',
+      'Requires a request-only `recipe`. Gemini generates nutrition fields and rejects menus below GOOD; recipe ingredients are never persisted.',
   })
   @ApiBody({
     type: CreateFoodDto,
@@ -43,7 +45,10 @@ export class AdminController {
   })
   @ApiOkResponse({
     schema: {
-      example: { message: 'Food created successfully', id: 'autoFirestoreDocId' },
+      example: {
+        message: 'Food created successfully',
+        id: 'autoFirestoreDocId',
+      },
     },
   })
   async createFood(@Body() createFoodDto: CreateFoodDto) {

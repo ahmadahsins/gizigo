@@ -15,6 +15,8 @@ export interface AuthUserPayload {
   email?: string;
 }
 
+type StoredUser = Record<string, unknown>;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -29,7 +31,9 @@ export class AuthService {
   async sync(user: AuthUserPayload, dto: AuthSyncDto = {}) {
     const rawAccountType = (dto as { account_type?: string }).account_type;
     if (rawAccountType === UserRole.ADMIN) {
-      throw new ForbiddenException('Admin accounts cannot be created via signup');
+      throw new ForbiddenException(
+        'Admin accounts cannot be created via signup',
+      );
     }
 
     const accountType = dto.account_type ?? UserRole.CUSTOMER;
@@ -38,16 +42,19 @@ export class AuthService {
     const userDoc = await userRef.get();
 
     if (userDoc.exists) {
-      const existingRole = userDoc.data()?.role ?? UserRole.CUSTOMER;
+      const storedUser = this.toRecord(userDoc.data());
+      const existingRole = this.readRole(storedUser['role']);
       if (dto.account_type && dto.account_type !== existingRole) {
-        throw new ConflictException('Account type cannot be changed after signup');
+        throw new ConflictException(
+          'Account type cannot be changed after signup',
+        );
       }
 
       return {
         message: 'Synced successfully',
         uid: user.uid,
         role: existingRole,
-        merchant_id: userDoc.data()?.merchant_id ?? null,
+        merchant_id: this.readString(storedUser['merchant_id']),
       };
     }
 
@@ -113,5 +120,21 @@ export class AuthService {
       role: UserRole.MERCHANT,
       merchant_id: user.uid,
     };
+  }
+
+  private readRole(value: unknown): UserRole {
+    return Object.values(UserRole).includes(value as UserRole)
+      ? (value as UserRole)
+      : UserRole.CUSTOMER;
+  }
+
+  private readString(value: unknown): string | null {
+    return typeof value === 'string' ? value : null;
+  }
+
+  private toRecord(value: unknown): StoredUser {
+    return value !== null && typeof value === 'object'
+      ? { ...(value as StoredUser) }
+      : {};
   }
 }

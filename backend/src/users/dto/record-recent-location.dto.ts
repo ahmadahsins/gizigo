@@ -5,21 +5,21 @@ import { Type } from 'class-transformer';
 export class RecordRecentLocationDto {
   @ApiProperty({ example: 'UGM, Yogyakarta' })
   @IsString()
-  label: string;
+  label!: string;
 
   @ApiProperty()
   @IsString()
-  address: string;
+  address!: string;
 
   @ApiProperty({ description: 'Latitude (WGS84)' })
   @Type(() => Number)
   @IsNumber()
-  lat: number;
+  lat!: number;
 
   @ApiProperty({ description: 'Longitude (WGS84)' })
   @Type(() => Number)
   @IsNumber()
-  lng: number;
+  lng!: number;
 
   @ApiPropertyOptional({
     description: 'Distance from current pin in km (client-calculated)',

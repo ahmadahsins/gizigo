@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserRole } from '../common/enums/user-role.enum';
 
@@ -28,13 +24,15 @@ describe('AuthService', () => {
       set: jest.fn(),
     };
 
-    runTransaction = jest.fn(async (fn: (tx: { get: jest.Mock; set: jest.Mock }) => Promise<void>) => {
-      const tx = {
-        get: jest.fn().mockResolvedValue({ exists: false }),
-        set: jest.fn(),
-      };
-      await fn(tx);
-    });
+    runTransaction = jest.fn(
+      async (fn: (tx: { get: jest.Mock; set: jest.Mock }) => Promise<void>) => {
+        const tx = {
+          get: jest.fn().mockResolvedValue({ exists: false }),
+          set: jest.fn(),
+        };
+        await fn(tx);
+      },
+    );
 
     const firebaseService = {
       getFirestore: jest.fn().mockReturnValue({

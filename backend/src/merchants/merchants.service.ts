@@ -17,6 +17,8 @@ export interface CreateMerchantOptions {
   isVerified?: boolean;
 }
 
+type StoredMerchant = Record<string, unknown>;
+
 @Injectable()
 export class MerchantsService {
   constructor(private readonly firebaseService: FirebaseService) {}
@@ -35,7 +37,8 @@ export class MerchantsService {
       : db.collection('merchants').doc();
 
     const merchantId = merchantRef.id;
-    const ownerUid = options.ownerUid ?? ('owner_uid' in dto ? dto.owner_uid : undefined);
+    const ownerUid =
+      options.ownerUid ?? ('owner_uid' in dto ? dto.owner_uid : undefined);
 
     const payload = this.buildMerchantPayload(merchantId, dto, {
       ownerUid,
@@ -123,7 +126,11 @@ export class MerchantsService {
       items = items.filter((item) => item.is_active === query.is_active);
     }
 
-    items.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    items.sort((a, b) =>
+      (typeof a.name === 'string' ? a.name : '').localeCompare(
+        typeof b.name === 'string' ? b.name : '',
+      ),
+    );
 
     const total = items.length;
     const start = (page - 1) * limit;
@@ -158,19 +165,23 @@ export class MerchantsService {
     };
   }
 
-  private serializeMerchant(data: FirebaseFirestore.DocumentData) {
-    const coords = data.coordinates as FirebaseFirestore.GeoPoint | undefined;
+  private serializeMerchant(value: unknown) {
+    const data = (value ?? {}) as StoredMerchant;
+    const coords =
+      data['coordinates'] instanceof admin.firestore.GeoPoint
+        ? data['coordinates']
+        : undefined;
     return {
-      merchant_id: data.merchant_id ?? null,
-      name: data.name ?? null,
-      address: data.address ?? null,
+      merchant_id: data['merchant_id'] ?? null,
+      name: data['name'] ?? null,
+      address: data['address'] ?? null,
       lat: coords?.latitude ?? null,
       lng: coords?.longitude ?? null,
-      owner_uid: data.owner_uid ?? null,
-      is_verified: data.is_verified ?? true,
-      is_active: data.is_active ?? true,
-      created_at: this.serializeTs(data.created_at),
-      updated_at: this.serializeTs(data.updated_at),
+      owner_uid: data['owner_uid'] ?? null,
+      is_verified: data['is_verified'] ?? true,
+      is_active: data['is_active'] ?? true,
+      created_at: this.serializeTs(data['created_at']),
+      updated_at: this.serializeTs(data['updated_at']),
     };
   }
 

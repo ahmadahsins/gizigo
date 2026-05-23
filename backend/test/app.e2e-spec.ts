@@ -38,9 +38,9 @@ describe('AppController (e2e)', () => {
       .get('/meta/nutrition-grades')
       .expect(200)
       .expect((res) => {
-        expect(res.body.items.map((x: { key: string }) => x.key).sort()).toEqual(
-          ['EXCELLENT', 'GOOD', 'VERY_GOOD'],
-        );
+        expect(
+          res.body.items.map((x: { key: string }) => x.key).sort(),
+        ).toEqual(['EXCELLENT', 'GOOD', 'VERY_GOOD']);
       });
   });
 
@@ -49,9 +49,9 @@ describe('AppController (e2e)', () => {
       .get('/meta/nutrition-goals')
       .expect(200)
       .expect((res) => {
-        expect(res.body.items.map((x: { key: string }) => x.key).sort()).toEqual(
-          ['BULKING', 'DIET', 'MAINTAIN'],
-        );
+        expect(
+          res.body.items.map((x: { key: string }) => x.key).sort(),
+        ).toEqual(['BULKING', 'DIET', 'MAINTAIN']);
       });
   });
 

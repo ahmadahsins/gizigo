@@ -24,7 +24,8 @@ export class FoodsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Paginated food list with nutrition, category, price, distance filters',
+    summary:
+      'Paginated food list with nutrition, category, price, distance filters',
     description:
       'Returns `{ items, total, page, limit, total_pages }`. Each item includes `vendor_name` and `image_url`. Pass `lat`/`lng` for `distance_in_km` and distance sort.',
   })
@@ -54,7 +55,7 @@ export class FoodsController {
     summary:
       'Personalized home sections — “You Might Like This” + recommendations rail',
     description:
-      '`featured`: prefers `is_featured` then highest score. Scoring uses `PATCH /users/me` fields (`nutrition_goal`, `food_preferences`) and `foods.nutritional_info` when available. Without onboarding data, falls back to `recommendation_score` + nutrition tier.',
+      '`featured` prefers `is_featured`. Gemini ranks available foods from body profile, restrictions, and taste preferences when available; `context.recommendation_source` identifies Gemini or local fallback.',
   })
   @ApiOkResponse({
     schema: { example: RECOMMENDATIONS_RESPONSE_EXAMPLE },

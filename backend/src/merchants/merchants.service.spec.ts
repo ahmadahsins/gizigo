@@ -64,7 +64,10 @@ describe('MerchantsService', () => {
   });
 
   it('soft deletes merchant', async () => {
-    merchantRef.get.mockResolvedValue({ exists: true, data: () => ({ name: 'X' }) });
+    merchantRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ name: 'X' }),
+    });
 
     const result = await service.deleteMerchant('merchant_a');
 

@@ -45,7 +45,9 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
     *   `age`: number (tahun)
     *   `weight_kg`, `height_cm`: number
     *   `nutrition_goal`: string enum `DIET` | `BULKING` | `MAINTAIN` (memengaruhi `/foods/recommendations`)
-    *   `food_preferences`: array string (dicocokkan longgar dengan `foods.health_labels`)
+*   `food_preferences`: array string (dicocokkan longgar dengan `foods.health_labels`)
+*   `dietary_restrictions`: array string (pembatasan diet untuk rekomendasi Gemini)
+*   `taste_profile`: array string (profil rasa untuk rekomendasi Gemini)
     *   `onboarding_completed`: boolean
 *   `created_at`: timestamp
 *   `updated_at`: timestamp (server)
@@ -76,7 +78,10 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 *   **`nutrition_grade`**: string enum **`EXCELLENT` | `VERY_GOOD` | `GOOD`** (badge “Excellent / Very good / Good” + filter **Label** di UI)
 *   **`food_category`**: string salah satu: `main_course`, `appetizers`, `snacks`, `desserts`, `beverages` (chip **Categories** di home)
 *   `health_labels`: array string (tag tambahan, mis. “High Protein”; **bukan** pengganti `nutrition_grade`)
-*   `nutritional_info`: map opsional `{ calories?, protein_g?, fat_g?, carb_g? }`
+*   `nutritional_info`: map hasil analisis Gemini per serving `{ calories, protein_g, fat_g, carb_g }`
+*   `nutrition_assessment_reason`: string alasan penilaian umum dari Gemini
+*   `nutrition_analyzed_at`: timestamp analisis terakhir
+*   Resep dan rincian bahan bersifat request-only dan tidak disimpan di dokumen `foods`.
 *   `base_price`: number (IDR)
 *   `merchant_id`: string (referensi ke `merchants`)
 *   `is_available`: boolean
@@ -141,7 +146,7 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | `featured_limit` | Default `1` — jumlah slot hero “You Might Like This” (mis. `is_featured` diprioritaskan) |
 | `limit` | Default `15` — panjang list “Recommendations for You” setelah featured |
 
-Tanpa `nutrition_goal` / `food_preferences` di profil, ranking fallback ke `recommendation_score` + tier gizi (+ jarak jika ada).
+Jika profil memiliki data tubuh atau preferensi, Gemini meranking menu aktif berdasarkan `gender`, `age`, `height_cm`, `weight_kg`, `nutrition_goal`, `food_preferences`, `dietary_restrictions`, dan `taste_profile`. Tanpa profil personalisasi atau saat Gemini gagal, ranking fallback ke `recommendation_score` + tier gizi (+ jarak jika ada).
 
 **Query `GET /foods` & `GET /foods/search`:**
 
@@ -171,7 +176,7 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 | Method | Path | Keterangan |
 | :--- | :--- | :--- |
 | GET | `/users/me` | Profil lengkap termasuk field onboarding |
-| PATCH | `/users/me` | Partial update — onboarding (`gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `onboarding_completed`, dll.) |
+| PATCH | `/users/me` | Partial update — onboarding (`gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `dietary_restrictions`, `taste_profile`, `onboarding_completed`, dll.) |
 | POST | `/users/me/recently-viewed` | Body `{ "food_id": "<docId>" }` — panggil saat membuka detail menu |
 | GET | `/users/me/recently-viewed` | Query `q`, `page`, `limit` — histori untuk layar “Recently viewed” |
 | POST | `/users/me/recent-locations` | Body lokasi; menyimpan/refresh entri recent |
@@ -184,8 +189,8 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 | GET | `/merchant/me` | Profil toko merchant login |
 | PATCH | `/merchant/me` | Update nama, alamat, koordinat |
 | GET | `/merchant/foods` | Daftar menu milik merchant |
-| POST | `/merchant/foods` | Buat menu (tanpa `merchant_id`; field admin-only di-strip) |
-| PUT | `/merchant/foods/:id` | Update menu milik sendiri |
+| POST | `/merchant/foods` | Buat menu; wajib resep request-only, gizi dibuat Gemini, grade di bawah `GOOD` ditolak |
+| PUT | `/merchant/foods/:id` | Update menu milik sendiri; kirim resep hanya untuk analisis gizi ulang |
 | DELETE | `/merchant/foods/:id` | Soft delete menu milik sendiri |
 
 ### 5.6 Admin (Bearer + role `admin`)
@@ -198,7 +203,7 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 | PUT | `/admin/merchants/:id` | Update merchant |
 | DELETE | `/admin/merchants/:id` | Soft delete merchant (`is_active: false`) |
 | GET | `/admin/merchants/:id/foods` | List foods per merchant |
-| POST | `/admin/foods` | Buat dokumen `foods` (lihat DTO; wajib `nutrition_grade`, `food_category`) |
+| POST | `/admin/foods` | Buat dokumen `foods`; wajib `food_category` dan resep request-only untuk analisis Gemini |
 | PUT | `/admin/foods/:id` | Partial update |
 | DELETE | `/admin/foods/:id` | Soft delete (`is_available: false`) |
 
@@ -230,7 +235,7 @@ Dimana:
 
 ### C. Rekomendasi personal (`GET /foods/recommendations`)
 
-Skor menggabungkan `recommendation_score`, bobot `nutrition_grade`, isi `nutritional_info` sesuai `nutrition_goal` (**DIET**: lebih rendah kalori / lemak; **BULKING**: lebih tinggi protein; **MAINTAIN**: keseimbangan), bonus kecocokan `food_preferences` dengan `health_labels`, dan bonus jarak jika `lat`/`lng` dikirim. Slot **featured** mengutamakan `is_featured` pada urutan skor tertinggi. Tanpa goal maupun preferensi, digunakan skor generik (`recommendation_score` + tier + jarak).
+Gemini meranking kandidat menu aktif dengan profil tubuh dan preferensi pengguna, termasuk restrictions serta taste profile. Slot **featured** tetap mengutamakan `is_featured` pada urutan hasil. Scoring lokal lama (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source`.
 
 ---
 
@@ -262,7 +267,7 @@ Skor menggabungkan `recommendation_score`, bobot `nutrition_grade`, isi `nutriti
     *   Token disimpan di `flutter_secure_storage`; interceptor `dio` menyematkan header Bearer.
 2.  **Onboarding (setelah registrasi):**
     *   Ambil label goal dari `GET /meta/nutrition-goals`.
-    *   Kirim `PATCH /users/me` dengan `gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `onboarding_completed: true`.
+    *   Kirim `PATCH /users/me` dengan `gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `dietary_restrictions`, `taste_profile`, `onboarding_completed: true`.
 3.  **API Requests dengan Interceptor (`dio`):**
     *   Set `BaseOptions(baseUrl: 'https://<your-api-host>/')`.
     *   Pada setiap request ke endpoint terproteksi, tambahkan header `Authorization: Bearer <Firebase_ID_Token>` (biasanya via `Interceptor` yang membaca token dari `flutter_secure_storage`).

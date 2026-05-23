@@ -6,6 +6,8 @@ import { RecordRecentLocationDto } from './dto/record-recent-location.dto';
 import { RecentlyViewedQueryDto } from './dto/recently-viewed-query.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 
+type StoredRecord = Record<string, unknown>;
+
 @Injectable()
 export class UsersService {
   constructor(private firebaseService: FirebaseService) {}
@@ -16,7 +18,7 @@ export class UsersService {
 
   async getProfile(uid: string) {
     const doc = await this.db().collection('users').doc(uid).get();
-    const data = doc.data() ?? {};
+    const data = this.toRecord(doc.data());
     return this.normalizeProfile(uid, data);
   }
 
@@ -75,10 +77,19 @@ export class UsersService {
       .limit(fetchSize)
       .get();
 
-    let rows = snap.docs.map((d) => ({
-      food_id: d.data().food_id as string,
-      viewed_at: this.serializeTs(d.data().viewed_at),
-    }));
+    const rows = snap.docs
+      .map((d) => {
+        const data = this.toRecord(d.data());
+        const foodId = data['food_id'];
+        if (typeof foodId !== 'string') return null;
+        return {
+          food_id: foodId,
+          viewed_at: this.serializeTs(data['viewed_at']),
+        };
+      })
+      .filter((row): row is { food_id: string; viewed_at: string | null } =>
+        Boolean(row),
+      );
 
     const foodIds = [...new Set(rows.map((r) => r.food_id).filter(Boolean))];
     const foodMap = await this.batchFoodMap(foodIds);
@@ -101,12 +112,8 @@ export class UsersService {
       const term = query.q.toLowerCase();
       items = items.filter(
         (row) =>
-          String(row.food.name ?? '')
-            .toLowerCase()
-            .includes(term) ||
-          String(row.food.description ?? '')
-            .toLowerCase()
-            .includes(term),
+          this.matchesText(row.food['name'], term) ||
+          this.matchesText(row.food['description'], term),
       );
     }
 
@@ -155,32 +162,41 @@ export class UsersService {
       .limit(50)
       .get();
 
-    return snap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-      last_used_at: this.serializeTs(d.data().last_used_at),
-    }));
+    return snap.docs.map((d) => {
+      const data = this.toRecord(d.data());
+      return {
+        id: d.id,
+        ...data,
+        last_used_at: this.serializeTs(data['last_used_at']),
+      };
+    });
   }
 
-  private normalizeProfile(uid: string, data: FirebaseFirestore.DocumentData) {
+  private normalizeProfile(uid: string, data: StoredRecord) {
     return {
       uid,
-      name: data.name ?? null,
-      email: data.email ?? null,
-      username: data.username ?? data.name ?? null,
-      role: data.role ?? 'customer',
-      merchant_id: data.merchant_id ?? null,
-      gender: data.gender ?? null,
-      age: data.age ?? null,
-      weight_kg: data.weight_kg ?? null,
-      height_cm: data.height_cm ?? null,
-      nutrition_goal: data.nutrition_goal ?? null,
-      food_preferences: Array.isArray(data.food_preferences)
-        ? data.food_preferences
+      name: data['name'] ?? null,
+      email: data['email'] ?? null,
+      username: data['username'] ?? data['name'] ?? null,
+      role: data['role'] ?? 'customer',
+      merchant_id: data['merchant_id'] ?? null,
+      gender: data['gender'] ?? null,
+      age: data['age'] ?? null,
+      weight_kg: data['weight_kg'] ?? null,
+      height_cm: data['height_cm'] ?? null,
+      nutrition_goal: data['nutrition_goal'] ?? null,
+      food_preferences: Array.isArray(data['food_preferences'])
+        ? data['food_preferences']
         : [],
-      onboarding_completed: Boolean(data.onboarding_completed),
-      preferred_language: data.preferred_language ?? null,
-      dark_mode: data.dark_mode ?? null,
+      dietary_restrictions: Array.isArray(data['dietary_restrictions'])
+        ? data['dietary_restrictions']
+        : [],
+      taste_profile: Array.isArray(data['taste_profile'])
+        ? data['taste_profile']
+        : [],
+      onboarding_completed: Boolean(data['onboarding_completed']),
+      preferred_language: data['preferred_language'] ?? null,
+      dark_mode: data['dark_mode'] ?? null,
     };
   }
 
@@ -194,8 +210,8 @@ export class UsersService {
 
   private async batchFoodMap(
     ids: string[],
-  ): Promise<Record<string, FirebaseFirestore.DocumentData>> {
-    const map: Record<string, FirebaseFirestore.DocumentData> = {};
+  ): Promise<Record<string, StoredRecord>> {
+    const map: Record<string, StoredRecord> = {};
     if (ids.length === 0) return map;
 
     const refs = ids.map((id) => this.db().collection('foods').doc(id));
@@ -207,24 +223,34 @@ export class UsersService {
     for (const chunk of chunks) {
       const docs = await this.db().getAll(...chunk);
       docs.forEach((d) => {
-        if (d.exists) map[d.id] = d.data() as FirebaseFirestore.DocumentData;
+        if (d.exists) map[d.id] = this.toRecord(d.data());
       });
     }
     return map;
   }
 
-  private publicFoodCard(id: string, food: FirebaseFirestore.DocumentData) {
+  private publicFoodCard(id: string, food: StoredRecord) {
     return {
       id,
-      name: food.name ?? null,
-      description: food.description ?? null,
-      photo_url: food.photo_url ?? null,
-      image_url: food.photo_url ?? null,
-      base_price: food.base_price ?? null,
-      nutrition_grade: food.nutrition_grade ?? null,
-      food_category: food.food_category ?? null,
-      merchant_id: food.merchant_id ?? null,
-      is_available: food.is_available ?? null,
+      name: food['name'] ?? null,
+      description: food['description'] ?? null,
+      photo_url: food['photo_url'] ?? null,
+      image_url: food['photo_url'] ?? null,
+      base_price: food['base_price'] ?? null,
+      nutrition_grade: food['nutrition_grade'] ?? null,
+      food_category: food['food_category'] ?? null,
+      merchant_id: food['merchant_id'] ?? null,
+      is_available: food['is_available'] ?? null,
     };
+  }
+
+  private toRecord(value: unknown): StoredRecord {
+    return value !== null && typeof value === 'object'
+      ? (value as StoredRecord)
+      : {};
+  }
+
+  private matchesText(value: unknown, term: string): boolean {
+    return typeof value === 'string' && value.toLowerCase().includes(term);
   }
 }

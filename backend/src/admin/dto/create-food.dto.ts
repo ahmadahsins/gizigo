@@ -1,30 +1,33 @@
 import {
-  IsString,
-  IsNumber,
-  IsBoolean,
+  ArrayMinSize,
   IsArray,
-  ValidateNested,
-  IsOptional,
-  IsUrl,
+  IsBoolean,
   IsEnum,
   IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUrl,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { NutritionGrade } from '../../common/enums/nutrition-grade.enum';
 import { FOOD_CATEGORY_KEYS } from '../../common/constants/food-categories';
+import { RecipeUnit } from '../../common/enums/recipe-unit.enum';
 
 class ProviderComparisonDto {
   @ApiProperty({ description: 'Base price on this provider' })
   @IsNumber()
-  price: number;
+  price!: number;
 
   @ApiProperty({
     description: 'Deep link URL to the food/merchant on this provider',
   })
   @IsUrl()
-  url: string;
+  url!: string;
 
   @ApiPropertyOptional({
     description: 'Logo/icon URL for this delivery platform (Flutter list UI)',
@@ -32,32 +35,6 @@ class ProviderComparisonDto {
   @IsOptional()
   @IsUrl()
   icon_url?: string;
-}
-
-class NutritionalInfoDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  calories?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  protein_g?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  fat_g?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  carb_g?: number;
 }
 
 class ComparisonDataDto {
@@ -80,25 +57,52 @@ class ComparisonDataDto {
   shopeefood?: ProviderComparisonDto;
 }
 
+export class RecipeIngredientDto {
+  @ApiProperty({ example: 'chicken breast' })
+  @IsString()
+  name!: string;
+
+  @ApiProperty({ example: 150, description: 'Quantity in the supplied unit' })
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  amount!: number;
+
+  @ApiProperty({ enum: RecipeUnit })
+  @IsEnum(RecipeUnit)
+  unit!: RecipeUnit;
+}
+
+export class RecipeDto {
+  @ApiProperty({
+    example: 1,
+    description: 'Number of portions; nutrition is calculated per serving',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  servings!: number;
+
+  @ApiProperty({ type: [RecipeIngredientDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeIngredientDto)
+  ingredients!: RecipeIngredientDto[];
+}
+
 export class CreateFoodDto {
   @ApiProperty()
   @IsString()
-  name: string;
+  name!: string;
 
   @ApiProperty()
   @IsString()
-  description: string;
+  description!: string;
 
   @ApiProperty()
   @IsUrl()
-  photo_url: string;
-
-  @ApiProperty({
-    enum: NutritionGrade,
-    description: 'Badge tier for healthy menu (filter “Label” in app)',
-  })
-  @IsEnum(NutritionGrade)
-  nutrition_grade: NutritionGrade;
+  photo_url!: string;
 
   @ApiProperty({
     enum: FOOD_CATEGORY_KEYS,
@@ -106,27 +110,36 @@ export class CreateFoodDto {
   })
   @IsString()
   @IsIn([...FOOD_CATEGORY_KEYS])
-  food_category: string;
+  food_category!: string;
 
   @ApiProperty({ type: [String] })
   @IsArray()
   @IsString({ each: true })
-  health_labels: string[];
+  health_labels!: string[];
 
   @ApiProperty()
   @IsNumber()
-  base_price: number;
+  base_price!: number;
+
+  @ApiProperty({
+    type: RecipeDto,
+    description:
+      'Request-only recipe used for Gemini nutrition analysis. Never persisted.',
+  })
+  @ValidateNested()
+  @Type(() => RecipeDto)
+  recipe!: RecipeDto;
 
   @ApiProperty()
   @IsString()
-  merchant_id: string;
+  merchant_id!: string;
 
   @ApiProperty()
   @IsBoolean()
-  is_available: boolean;
+  is_available!: boolean;
 
   @ApiPropertyOptional({
-    description: 'Featured hero card on home (“You Might Like This”)',
+    description: 'Featured hero card on home',
   })
   @IsOptional()
   @IsBoolean()
@@ -138,12 +151,6 @@ export class CreateFoodDto {
   @IsOptional()
   @IsNumber()
   recommendation_score?: number;
-
-  @ApiPropertyOptional({ type: NutritionalInfoDto })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => NutritionalInfoDto)
-  nutritional_info?: NutritionalInfoDto;
 
   @ApiPropertyOptional({ type: ComparisonDataDto })
   @IsOptional()

@@ -21,6 +21,25 @@ pnpm run start:dev
 
 Server berjalan di `http://localhost:3000`. Swagger UI tersedia di `/api`.
 
+## Gemini AI
+
+Set `GEMINI_API_KEY` untuk mengaktifkan analisis gizi menu dan rekomendasi
+personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
+`GEMINI_TIMEOUT_MS` default-nya `10000`.
+
+- `POST /merchant/foods` dan `POST /admin/foods` menerima `recipe` berisi
+  `servings` serta bahan dengan unit `pcs`, `g`, `ml`, `l`, `tsp`, `tbsp`,
+  `cup`, atau `slice`.
+- `recipe` hanya dipakai selama request analisis. Backend tidak menyimpannya
+  ke Firestore dan tidak mengembalikannya pada response.
+- Gemini menghasilkan `nutritional_info` per serving dan `nutrition_grade`.
+  Menu dengan grade di bawah `GOOD` ditolak dengan status `422`.
+- `PUT .../foods/:id` hanya menjalankan analisis ulang bila request membawa
+  `recipe`; perubahan metadata tidak mengubah hasil gizi.
+- `GET /foods/recommendations` memakai data profil dan preferensi untuk
+  meranking menu tersedia. Bila AI tidak tersedia, endpoint menggunakan
+  ranking lokal dan mengembalikan `context.recommendation_source: "fallback"`.
+
 ## Scripts
 
 | Command                | Fungsi                          |
@@ -82,6 +101,9 @@ Set di **Settings → Environment Variables** (centang Production + Preview):
 | `FIREBASE_PROJECT_ID`  | Firebase project ID                                |
 | `FIREBASE_CLIENT_EMAIL`| Service account email                              |
 | `FIREBASE_PRIVATE_KEY` | Private key (gunakan literal `\n` antar baris)     |
+| `GEMINI_API_KEY`       | API key Gemini untuk analisis/rekomendasi AI        |
+| `GEMINI_MODEL`         | Model Gemini opsional; default `gemini-2.5-flash`  |
+| `GEMINI_TIMEOUT_MS`    | Timeout request AI opsional; default `10000` ms     |
 
 Format `FIREBASE_PRIVATE_KEY`:
 
