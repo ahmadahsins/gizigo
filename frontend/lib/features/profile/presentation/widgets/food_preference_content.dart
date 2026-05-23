@@ -4,9 +4,28 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
 class FoodPreferenceContent extends StatefulWidget {
-  const FoodPreferenceContent({super.key, required this.onBack});
+  const FoodPreferenceContent({
+    super.key,
+    required this.onBack,
+    required this.onSave,
+    this.initialGoals = const [],
+    this.initialRestrictions = const [],
+    this.initialTasteProfiles = const [],
+    this.initialNutritionGoal = '',
+  });
 
   final VoidCallback onBack;
+  final Future<void> Function({
+    required List<String> goals,
+    required List<String> restrictions,
+    required List<String> tasteProfiles,
+    required String? nutritionGoal,
+  })
+  onSave;
+  final List<String> initialGoals;
+  final List<String> initialRestrictions;
+  final List<String> initialTasteProfiles;
+  final String initialNutritionGoal;
 
   @override
   State<FoodPreferenceContent> createState() => _FoodPreferenceContentState();
@@ -75,6 +94,25 @@ class _FoodPreferenceContentState extends State<FoodPreferenceContent> {
   final Set<String> _selectedRestrictions = {};
   final Set<String> _selectedTasteProfiles = {};
   bool _isSaved = false;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGoals.addAll(widget.initialGoals);
+    final goalFromNutritionGoal = _goalLabelForNutritionGoal(
+      widget.initialNutritionGoal,
+    );
+    if (goalFromNutritionGoal != null) {
+      _selectedGoals.add(goalFromNutritionGoal);
+    }
+    _selectedRestrictions.addAll(widget.initialRestrictions);
+    _selectedTasteProfiles.addAll(widget.initialTasteProfiles);
+    _isSaved =
+        _selectedGoals.isNotEmpty ||
+        _selectedRestrictions.isNotEmpty ||
+        _selectedTasteProfiles.isNotEmpty;
+  }
 
   List<_PreferenceChipData> get _selectedGoalItems {
     return _userGoals
@@ -195,7 +233,9 @@ class _FoodPreferenceContentState extends State<FoodPreferenceContent> {
               width: double.infinity,
               height: 45,
               child: ElevatedButton(
-                onPressed: _isSaved ? _editPreference : _savePreference,
+                onPressed: _isSaving
+                    ? null
+                    : (_isSaved ? _editPreference : _savePreference),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -207,7 +247,9 @@ class _FoodPreferenceContentState extends State<FoodPreferenceContent> {
                   ),
                 ),
                 child: Text(
-                  _isSaved ? 'Edit Preference' : 'Save Preference',
+                  _isSaving
+                      ? 'Saving...'
+                      : (_isSaved ? 'Edit Preference' : 'Save Preference'),
                   style: AppTextStyles.button.copyWith(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -231,14 +273,36 @@ class _FoodPreferenceContentState extends State<FoodPreferenceContent> {
     });
   }
 
-  void _savePreference() {
+  Future<void> _savePreference() async {
+    if (_isSaving) return;
+
     if (_selectedTasteProfiles.isEmpty) {
       _showSnackBar('Pilih minimal satu taste profile dulu.');
       return;
     }
 
-    setState(() => _isSaved = true);
-    _showSnackBar('Preference saved locally.');
+    setState(() => _isSaving = true);
+
+    try {
+      await widget.onSave(
+        goals: _selectedGoals.toList(growable: false),
+        restrictions: _selectedRestrictions.toList(growable: false),
+        tasteProfiles: _selectedTasteProfiles.toList(growable: false),
+        nutritionGoal: _nutritionGoalFor(_selectedGoals),
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _isSaved = true;
+        _isSaving = false;
+      });
+      _showSnackBar('Preference saved.');
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => _isSaving = false);
+      _showSnackBar('Preference belum bisa disimpan. Coba lagi.');
+    }
   }
 
   void _editPreference() {
@@ -249,6 +313,24 @@ class _FoodPreferenceContentState extends State<FoodPreferenceContent> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  static String? _nutritionGoalFor(Set<String> goals) {
+    if (goals.contains('Lose Weight') || goals.contains('Eat Healthier')) {
+      return 'DIET';
+    }
+    if (goals.contains('Gain Muscle')) return 'BULKING';
+    if (goals.contains('Maintain Weight')) return 'MAINTAIN';
+    return null;
+  }
+
+  static String? _goalLabelForNutritionGoal(String nutritionGoal) {
+    return switch (nutritionGoal.trim().toUpperCase()) {
+      'DIET' => 'Lose Weight',
+      'BULKING' => 'Gain Muscle',
+      'MAINTAIN' => 'Maintain Weight',
+      _ => null,
+    };
   }
 }
 

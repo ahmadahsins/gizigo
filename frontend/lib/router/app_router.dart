@@ -110,7 +110,15 @@ class AppRouter {
       GoRoute(
         path: '/search',
         name: search,
-        builder: (context, state) => const SearchScreen(),
+        builder: (context, state) {
+          final query = state.uri.queryParameters;
+          return SearchScreen(
+            initialQuery: query['q'],
+            initialCategoryKey: query['category'],
+            initialCategoryTitle: query['category_title'],
+            openFilterOnStart: query['open_filter'] == '1',
+          );
+        },
       ),
       GoRoute(
         path: '/select-location',

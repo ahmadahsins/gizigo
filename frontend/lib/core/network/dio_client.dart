@@ -45,6 +45,10 @@ class DioClient {
   InterceptorsWrapper _authInterceptor() {
     return InterceptorsWrapper(
       onRequest: (options, handler) async {
+        if (options.data is FormData) {
+          options.headers.remove('Content-Type');
+        }
+
         final token = await _readFirebaseToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';

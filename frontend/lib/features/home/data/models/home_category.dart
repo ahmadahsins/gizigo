@@ -26,6 +26,10 @@ class HomeCategory {
       'snacks' => 'assets/icons/categories-menu/snacks.svg',
       'desserts' => 'assets/icons/categories-menu/desserts.svg',
       'beverages' => 'assets/icons/categories-menu/beverages.svg',
+      'breakfast' => 'assets/icons/categories-menu/breakfast.svg',
+      'lunch' => 'assets/icons/categories-menu/lunch.svg',
+      'dinner' => 'assets/icons/categories-menu/dinner.svg',
+      'salads' => 'assets/icons/categories-menu/salads.svg',
       _ => 'assets/icons/categories-menu/main-course.svg',
     };
   }

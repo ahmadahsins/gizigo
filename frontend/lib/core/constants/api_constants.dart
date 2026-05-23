@@ -22,6 +22,7 @@ class ApiConstants {
   static const String authSync = '/auth/sync';
 
   static const String usersMe = '/users/me';
+  static const String usersMePhoto = '/users/me/photo';
   static const String usersRecentlyViewed = '/users/me/recently-viewed';
   static const String usersRecentLocations = '/users/me/recent-locations';
 

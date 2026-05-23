@@ -57,15 +57,25 @@ class HomeRepository {
 
   List<HomeCategory> get localCategories => _localCategories;
 
+  Future<List<HomeCategory>> getCategories() async {
+    try {
+      final categories = await _remoteDataSource.getCategories();
+      if (categories.isNotEmpty) return categories;
+    } catch (_) {}
+
+    return _localCategories;
+  }
+
   Future<HomeData> getHomeData({double? lat, double? lng}) async {
     try {
+      final categories = await getCategories();
       final recommendations = await _remoteDataSource.getRecommendations(
         lat: lat,
         lng: lng,
       );
 
       return HomeData(
-        categories: _localCategories,
+        categories: categories,
         featured: recommendations.featured,
         recommendations: recommendations.recommendations,
       );

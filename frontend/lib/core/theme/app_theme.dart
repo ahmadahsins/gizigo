@@ -61,7 +61,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceVariant,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -78,17 +81,12 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: GoogleFonts.inter(
-          color: AppColors.textHint,
-          fontSize: 14,
-        ),
+        hintStyle: GoogleFonts.inter(color: AppColors.textHint, fontSize: 14),
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       chipTheme: ChipThemeData(
@@ -98,9 +96,7 @@ class AppTheme {
           fontWeight: FontWeight.w500,
           color: AppColors.primaryDark,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),

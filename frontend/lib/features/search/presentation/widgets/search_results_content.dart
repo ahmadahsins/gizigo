@@ -15,10 +15,13 @@ class SearchResultsContent extends StatelessWidget {
     required this.onPriceFilterTap,
     required this.onLabelFilterTap,
     required this.onRangeFilterTap,
+    required this.onFoodTap,
     this.hasAnyFilter = false,
     this.hasPriceFilter = false,
     this.hasLabelFilter = false,
     this.hasRangeFilter = false,
+    this.isLoading = false,
+    this.errorMessage,
   });
 
   final double horizontalPadding;
@@ -27,10 +30,13 @@ class SearchResultsContent extends StatelessWidget {
   final VoidCallback onPriceFilterTap;
   final VoidCallback onLabelFilterTap;
   final VoidCallback onRangeFilterTap;
+  final ValueChanged<SearchFoodItem> onFoodTap;
   final bool hasAnyFilter;
   final bool hasPriceFilter;
   final bool hasLabelFilter;
   final bool hasRangeFilter;
+  final bool isLoading;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -70,8 +76,12 @@ class SearchResultsContent extends StatelessWidget {
         ),
         const SizedBox(height: 27),
         Expanded(
-          child: foods.isEmpty
-              ? const _EmptySearchResult()
+          child: isLoading
+              ? const _SearchLoadingState()
+              : errorMessage != null
+              ? _SearchStatus(message: errorMessage!)
+              : foods.isEmpty
+              ? const _SearchStatus(message: 'No menu found')
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     horizontalPadding,
@@ -81,7 +91,11 @@ class SearchResultsContent extends StatelessWidget {
                   ),
                   itemCount: foods.length,
                   itemBuilder: (context, index) {
-                    return _SearchResultTile(food: foods[index]);
+                    final food = foods[index];
+                    return _SearchResultTile(
+                      food: food,
+                      onTap: () => onFoodTap(food),
+                    );
                   },
                 ),
         ),
@@ -91,9 +105,10 @@ class SearchResultsContent extends StatelessWidget {
 }
 
 class _SearchResultTile extends StatelessWidget {
-  const _SearchResultTile({required this.food});
+  const _SearchResultTile({required this.food, required this.onTap});
 
   final SearchFoodItem food;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -103,12 +118,26 @@ class _SearchResultTile extends StatelessWidget {
       subtitle: food.subtitle,
       price: food.price,
       ratingText: food.ratingText,
+      onTap: onTap,
     );
   }
 }
 
-class _EmptySearchResult extends StatelessWidget {
-  const _EmptySearchResult();
+class _SearchLoadingState extends StatelessWidget {
+  const _SearchLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: CircularProgressIndicator(color: AppColors.primary),
+    );
+  }
+}
+
+class _SearchStatus extends StatelessWidget {
+  const _SearchStatus({required this.message});
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +145,7 @@ class _EmptySearchResult extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Text(
-          'No menu found',
+          message,
           textAlign: TextAlign.center,
           style: AppTextStyles.bodyMedium.copyWith(
             color: AppColors.textSecondary,

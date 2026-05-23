@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/api_constants.dart';
@@ -77,6 +78,82 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (_isLoading) return;
+
+    if (Firebase.apps.isEmpty) {
+      _showError('Firebase belum dikonfigurasi di frontend.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final idToken = await userCredential.user?.getIdToken(true);
+
+      if (idToken == null) {
+        throw FirebaseAuthException(
+          code: 'missing-token',
+          message: 'Firebase token tidak ditemukan.',
+        );
+      }
+
+      await _secureStorage.write(
+        key: ApiConstants.firebaseIdTokenStorageKey,
+        value: idToken,
+      );
+      await DioClient(storage: _secureStorage).post(ApiConstants.authSync);
+
+      if (!mounted) return;
+      context.goNamed('home');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      _showError(_authErrorMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      _showError('Google sign in gagal. Cek konfigurasi dan coba lagi.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendPasswordResetEmail() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      _showError('Isi email yang valid dulu.');
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link reset password sudah dikirim.')),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      _showError(_authErrorMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      _showError('Reset password gagal. Coba lagi.');
     }
   }
 
@@ -178,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                               labelSuffix: GestureDetector(
-                                onTap: () {},
+                                onTap: _sendPasswordResetEmail,
                                 child: Text(
                                   'Forgot Password?',
                                   style: GoogleFonts.inter(
@@ -230,9 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Google Sign in Button
                       GoogleButton(
                         text: 'Sign in with Google',
-                        onPressed: () {
-                          _showError('Google sign in belum dikonfigurasi.');
-                        },
+                        onPressed: _signInWithGoogle,
                       ),
 
                       const Spacer(),

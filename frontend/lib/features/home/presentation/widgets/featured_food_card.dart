@@ -76,13 +76,11 @@ class FeaturedFoodCard extends StatelessWidget {
               Positioned(
                 top: 16,
                 right: 16,
-                child: RatingBadge(
-                  text: ratingText,
-                ),
+                child: RatingBadge(text: ratingText),
               ),
             ],
           ),
-          
+
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(

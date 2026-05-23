@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/services/auto_refresh_service.dart';
@@ -41,11 +43,13 @@ class _ProfileScreenState extends State<ProfileScreen>
   late final TextEditingController _heightController;
   late final TextEditingController _weightController;
   late final ProfileRemoteDataSource _profileRemoteDataSource;
+  late final ImagePicker _imagePicker;
 
   _ProfileView _view = _ProfileView.menu;
   bool _isEditingAccount = false;
   bool _isLoadingProfile = true;
   bool _isSavingProfile = false;
+  bool _isUploadingPhoto = false;
   bool _isLoadingHistory = false;
 
   String _savedFullName = '';
@@ -54,6 +58,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _savedAge = '';
   String _savedHeight = '';
   String _savedWeight = '';
+  String _savedProfilePhotoUrl = '';
+  String _savedNutritionGoal = '';
+  List<String> _savedFoodPreferences = const [];
+  List<String> _savedDietaryRestrictions = const [];
+  List<String> _savedTasteProfile = const [];
+  String _savedPreferredLanguage = '';
   String? _profileError;
   String? _historyError;
   List<ProfileHistoryItem> _historyItems = const [];
@@ -68,6 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     _heightController = TextEditingController(text: _savedHeight);
     _weightController = TextEditingController(text: _savedWeight);
     _profileRemoteDataSource = ProfileRemoteDataSource(DioClient());
+    _imagePicker = ImagePicker();
     _loadProfile();
   }
 
@@ -125,7 +136,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                     minHeight: constraints.maxHeight - 61,
                   ),
                   child: isFoodPreferenceView
-                      ? FoodPreferenceContent(onBack: _handleBack)
+                      ? FoodPreferenceContent(
+                          initialGoals: _savedFoodPreferences,
+                          initialRestrictions: _savedDietaryRestrictions,
+                          initialTasteProfiles: _savedTasteProfile,
+                          initialNutritionGoal: _savedNutritionGoal,
+                          onBack: _handleBack,
+                          onSave: _saveFoodPreferences,
+                        )
                       : IntrinsicHeight(child: _buildCurrentProfileView()),
                 ),
               );
@@ -152,6 +170,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         onBack: _handleBack,
         onEdit: _enableAccountEditing,
         onEditPhoto: _handleEditPhoto,
+        profilePhotoUrl: _savedProfilePhotoUrl,
+        isUploadingPhoto: _isUploadingPhoto,
         onSave: _saveAccountChanges,
         onDiscard: _discardAccountChanges,
         onGenderChanged: _setGender,
@@ -166,11 +186,14 @@ class _ProfileScreenState extends State<ProfileScreen>
       _ProfileView.menu => _ProfileMenuContent(
         displayName: _displayName,
         isLoading: _isLoadingProfile,
+        profilePhotoUrl: _savedProfilePhotoUrl,
         onBack: _handleBack,
         onAccountTap: _openAccount,
         onFoodPreferenceTap: _openFoodPreference,
         onHistoryTap: _openHistory,
         onLogoutTap: _handleLogoutTap,
+        preferredLanguage: _languageLabel,
+        onLanguageTap: _handleLanguageTap,
       ),
       _ProfileView.foodPreference => const SizedBox.shrink(),
     };
@@ -184,6 +207,13 @@ class _ProfileScreenState extends State<ProfileScreen>
       FirebaseAuth.instance.currentUser?.email,
       'User',
     ]);
+  }
+
+  String get _languageLabel {
+    return switch (_savedPreferredLanguage.trim().toLowerCase()) {
+      'id' || 'id_id' => 'Bahasa Indonesia',
+      _ => 'English (US)',
+    };
   }
 
   void _handleBack() {
@@ -230,8 +260,34 @@ class _ProfileScreenState extends State<ProfileScreen>
     setState(() => _isEditingAccount = true);
   }
 
-  void _handleEditPhoto() {
-    // TODO: Connect to image picker when profile photo persistence is ready.
+  Future<void> _handleEditPhoto() async {
+    if (_isUploadingPhoto) return;
+
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 1024,
+      );
+      if (image == null || !mounted) return;
+
+      setState(() => _isUploadingPhoto = true);
+      final profile = await _profileRemoteDataSource.uploadProfilePhoto(
+        bytes: await image.readAsBytes(),
+        filename: image.name.isEmpty ? 'profile-photo.jpg' : image.name,
+      );
+      if (!mounted) return;
+
+      _applyProfile(profile);
+      setState(() => _isUploadingPhoto = false);
+      AutoRefreshService.instance.refreshNow();
+      _showSnackBar('Profile photo updated.');
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() => _isUploadingPhoto = false);
+      _showSnackBar(_profileSaveErrorMessage(error));
+    }
   }
 
   void _setGender(String? gender) {
@@ -276,6 +332,25 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  Future<void> _saveFoodPreferences({
+    required List<String> goals,
+    required List<String> restrictions,
+    required List<String> tasteProfiles,
+    required String? nutritionGoal,
+  }) async {
+    final profile = await _profileRemoteDataSource.updatePreferences(
+      foodPreferences: goals,
+      dietaryRestrictions: restrictions,
+      tasteProfile: tasteProfiles,
+      nutritionGoal: nutritionGoal,
+    );
+
+    if (!mounted) return;
+
+    _applyProfile(profile);
+    AutoRefreshService.instance.refreshNow();
+  }
+
   void _discardAccountChanges() {
     _fullNameController.text = _savedFullName;
     _emailController.text = _savedEmail;
@@ -298,6 +373,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     if (!mounted || confirmed != true) return;
 
+    await Future.wait([
+      FirebaseAuth.instance.signOut(),
+      GoogleSignIn().signOut(),
+    ]);
     await _secureStorage.delete(key: ApiConstants.firebaseIdTokenStorageKey);
 
     if (!mounted) return;
@@ -333,6 +412,52 @@ class _ProfileScreenState extends State<ProfileScreen>
           _profileError = 'Profile belum bisa dimuat dari database.';
         });
       }
+    }
+  }
+
+  Future<void> _handleLanguageTap() async {
+    final selectedLanguage = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      constraints: const BoxConstraints(maxWidth: 520),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _LanguageOptionTile(
+                  label: 'English (US)',
+                  value: 'en',
+                  selectedValue: _savedPreferredLanguage,
+                ),
+                _LanguageOptionTile(
+                  label: 'Bahasa Indonesia',
+                  value: 'id',
+                  selectedValue: _savedPreferredLanguage,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selectedLanguage == null) return;
+
+    try {
+      final profile = await _profileRemoteDataSource.updateLanguage(
+        selectedLanguage,
+      );
+      if (!mounted) return;
+
+      _applyProfile(profile);
+      AutoRefreshService.instance.refreshNow();
+      _showSnackBar('Language preference updated.');
+    } catch (error) {
+      if (!mounted) return;
+      _showSnackBar(_profileSaveErrorMessage(error));
     }
   }
 
@@ -381,6 +506,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     _savedAge = profile.age?.toString() ?? '';
     _savedHeight = profile.heightCm?.toString() ?? '';
     _savedWeight = profile.weightKg?.toString() ?? '';
+    _savedProfilePhotoUrl = profile.profilePhotoUrl;
+    _savedNutritionGoal = profile.nutritionGoal;
+    _savedFoodPreferences = profile.foodPreferences;
+    _savedDietaryRestrictions = profile.dietaryRestrictions;
+    _savedTasteProfile = profile.tasteProfile;
+    _savedPreferredLanguage = profile.preferredLanguage;
     _discardAccountChanges();
   }
 
@@ -392,6 +523,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       'User',
     ]);
     _savedEmail = user?.email?.trim() ?? '';
+    _savedProfilePhotoUrl = user?.photoURL?.trim() ?? '';
+    _savedNutritionGoal = '';
+    _savedFoodPreferences = const [];
+    _savedDietaryRestrictions = const [];
+    _savedTasteProfile = const [];
+    _savedPreferredLanguage = '';
     _discardAccountChanges();
   }
 
@@ -481,20 +618,26 @@ class _ProfileMenuContent extends StatelessWidget {
   const _ProfileMenuContent({
     required this.displayName,
     required this.isLoading,
+    required this.profilePhotoUrl,
     required this.onBack,
     required this.onAccountTap,
     required this.onFoodPreferenceTap,
     required this.onHistoryTap,
     required this.onLogoutTap,
+    required this.preferredLanguage,
+    required this.onLanguageTap,
   });
 
   final String displayName;
   final bool isLoading;
+  final String profilePhotoUrl;
   final VoidCallback onBack;
   final VoidCallback onAccountTap;
   final VoidCallback onFoodPreferenceTap;
   final VoidCallback onHistoryTap;
   final VoidCallback onLogoutTap;
+  final String preferredLanguage;
+  final VoidCallback onLanguageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -503,7 +646,7 @@ class _ProfileMenuContent extends StatelessWidget {
       children: [
         _BackButton(onPressed: onBack),
         const SizedBox(height: 22),
-        const Center(child: _ProfileAvatar()),
+        Center(child: _ProfileAvatar(imageUrl: profilePhotoUrl)),
         const SizedBox(height: 17),
         Center(
           child: isLoading
@@ -563,7 +706,7 @@ class _ProfileMenuContent extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'English (US)',
+                preferredLanguage,
                 style: AppTextStyles.bodySmall.copyWith(
                   fontSize: 12,
                   color: const Color(0xFF242424),
@@ -578,9 +721,34 @@ class _ProfileMenuContent extends StatelessWidget {
               ),
             ],
           ),
-          onTap: () {},
+          onTap: onLanguageTap,
         ),
       ],
+    );
+  }
+}
+
+class _LanguageOptionTile extends StatelessWidget {
+  const _LanguageOptionTile({
+    required this.label,
+    required this.value,
+    required this.selectedValue,
+  });
+
+  final String label;
+  final String value;
+  final String selectedValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selectedValue.trim().toLowerCase() == value;
+
+    return ListTile(
+      title: Text(label, style: AppTextStyles.bodyMedium),
+      trailing: isSelected
+          ? const Icon(Icons.check_rounded, color: AppColors.primary)
+          : null,
+      onTap: () => Navigator.of(context).pop(value),
     );
   }
 }
@@ -716,7 +884,7 @@ class _HistoryContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 21),
-        const CustomSearchBar(),
+        CustomSearchBar(onTap: () => context.pushNamed(AppRouter.search)),
         const SizedBox(height: 24),
         if (isLoading)
           const Center(
@@ -815,6 +983,12 @@ class _HistorySection extends StatelessWidget {
             subtitle: item.description,
             price: item.formattedPrice,
             ratingText: item.ratingText,
+            onTap: item.foodId.isEmpty
+                ? null
+                : () => context.pushNamed(
+                    AppRouter.foodDetail,
+                    pathParameters: {'id': item.foodId},
+                  ),
           ),
         ),
       ],
@@ -834,6 +1008,8 @@ class _AccountContent extends StatelessWidget {
     required this.ageController,
     required this.heightController,
     required this.weightController,
+    required this.profilePhotoUrl,
+    required this.isUploadingPhoto,
     required this.onBack,
     required this.onEdit,
     required this.onEditPhoto,
@@ -852,6 +1028,8 @@ class _AccountContent extends StatelessWidget {
   final TextEditingController ageController;
   final TextEditingController heightController;
   final TextEditingController weightController;
+  final String profilePhotoUrl;
+  final bool isUploadingPhoto;
   final VoidCallback onBack;
   final VoidCallback onEdit;
   final VoidCallback onEditPhoto;
@@ -869,8 +1047,10 @@ class _AccountContent extends StatelessWidget {
         Center(
           child: _ProfileAvatar(
             size: 124,
+            imageUrl: profilePhotoUrl,
             showEditButton: isEditing,
-            onEditPhoto: onEditPhoto,
+            isUploading: isUploadingPhoto,
+            onEditPhoto: isUploadingPhoto ? null : onEditPhoto,
           ),
         ),
         const SizedBox(height: 63),
@@ -1029,12 +1209,16 @@ class _BackButton extends StatelessWidget {
 class _ProfileAvatar extends StatelessWidget {
   const _ProfileAvatar({
     this.size = 108,
+    this.imageUrl = '',
     this.showEditButton = false,
+    this.isUploading = false,
     this.onEditPhoto,
   });
 
   final double size;
+  final String imageUrl;
   final bool showEditButton;
+  final bool isUploading;
   final VoidCallback? onEditPhoto;
 
   @override
@@ -1053,27 +1237,35 @@ class _ProfileAvatar extends StatelessWidget {
             ),
             child: SizedBox.expand(),
           ),
-          Positioned(
-            top: size * 0.15,
-            child: Container(
-              width: size * 0.3,
-              height: size * 0.3,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
+          if (imageUrl.trim().isNotEmpty)
+            ClipOval(
+              child: Image.network(
+                imageUrl,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _DefaultProfileAvatar(size: size);
+                },
+              ),
+            )
+          else
+            _DefaultProfileAvatar(size: size),
+          if (isUploading)
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color(0x66000000),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2.4,
+                  ),
+                ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: size * 0.16,
-            child: ClipOval(
-              child: Container(
-                width: size * 0.67,
-                height: size * 0.35,
-                color: Colors.white,
-              ),
-            ),
-          ),
           if (showEditButton)
             Positioned(
               right: 1,
@@ -1096,6 +1288,46 @@ class _ProfileAvatar extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DefaultProfileAvatar extends StatelessWidget {
+  const _DefaultProfileAvatar({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: size * 0.15,
+            child: Container(
+              width: size * 0.3,
+              height: size * 0.3,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: size * 0.16,
+            child: ClipOval(
+              child: Container(
+                width: size * 0.67,
+                height: size * 0.35,
+                color: Colors.white,
+              ),
+            ),
+          ),
         ],
       ),
     );
