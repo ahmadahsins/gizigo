@@ -11,8 +11,10 @@ class AppColors {
 
   // Secondary - Soft Green
   static const Color secondary = Color(0xFF548159);
-  static const Color secondaryLight = Color(0xFF7CA681); // Adjusted lighter shade
-  static const Color secondaryDark = Color(0xFF335937);  // Adjusted darker shade
+  static const Color secondaryLight = Color(
+    0xFF7CA681,
+  ); // Adjusted lighter shade
+  static const Color secondaryDark = Color(0xFF335937); // Adjusted darker shade
 
   // Accent
   static const Color accent = Color(0xFFFFC107);

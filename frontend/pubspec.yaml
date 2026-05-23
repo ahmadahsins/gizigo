@@ -46,6 +46,7 @@ dependencies:
 
   # Image Caching
   cached_network_image: ^3.4.1
+  image_picker: ^1.1.2
 
   # Loading Shimmer
   shimmer: ^3.0.0

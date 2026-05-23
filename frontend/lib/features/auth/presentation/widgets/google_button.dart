@@ -6,11 +6,7 @@ class GoogleButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
 
-  const GoogleButton({
-    super.key,
-    required this.text,
-    required this.onPressed,
-  });
+  const GoogleButton({super.key, required this.text, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -32,11 +28,8 @@ class GoogleButton extends StatelessWidget {
               'https://developers.google.com/identity/images/g-logo.png',
               width: 24,
               height: 24,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.g_mobiledata,
-                color: Colors.blue,
-                size: 32,
-              ),
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.g_mobiledata, color: Colors.blue, size: 32),
             ),
             const SizedBox(width: 12),
             Text(

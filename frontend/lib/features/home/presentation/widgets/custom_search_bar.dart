@@ -4,10 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 class CustomSearchBar extends StatelessWidget {
   final VoidCallback? onTap;
 
-  const CustomSearchBar({
-    super.key,
-    this.onTap,
-  });
+  const CustomSearchBar({super.key, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -22,11 +19,7 @@ class CustomSearchBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.search_rounded,
-              color: Colors.black87,
-              size: 24,
-            ),
+            const Icon(Icons.search_rounded, color: Colors.black87, size: 24),
             const SizedBox(width: 12),
             Text(
               'Search',

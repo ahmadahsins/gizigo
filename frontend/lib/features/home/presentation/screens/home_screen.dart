@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../router/app_router.dart';
 import '../../../location/domain/entities/location_item.dart';
+import '../../data/models/home_category.dart';
 import '../../data/models/home_food_item.dart';
 import '../providers/home_providers.dart';
 import '../widgets/home_header.dart';
@@ -48,10 +49,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final request = _homeRequest;
-    final categories = ref.watch(homeCategoriesProvider);
+    final fallbackCategories = ref.watch(homeCategoriesProvider);
     final userName = ref.watch(homeUserNameProvider).valueOrNull ?? 'there';
     final homeAsync = ref.watch(homeDataProvider(request));
     final homeData = homeAsync.valueOrNull;
+    final categories = homeData?.categories ?? fallbackCategories;
     final isInitialLoading = homeAsync.isLoading && homeData == null;
     final recommendationsError = homeData?.recommendationsError;
 
@@ -90,20 +92,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
-                    children: const [
-                      FilterDropdownChip(label: 'Filters'),
-                      SizedBox(width: 8),
-                      FilterDropdownChip(label: 'Price'),
-                      SizedBox(width: 8),
-                      FilterDropdownChip(label: 'Label'),
-                      SizedBox(width: 8),
-                      FilterDropdownChip(label: 'Range'),
+                    children: [
+                      FilterDropdownChip(
+                        label: 'Filters',
+                        onTap: _openSearchFilters,
+                      ),
+                      const SizedBox(width: 8),
+                      FilterDropdownChip(
+                        label: 'Price',
+                        onTap: _openSearchFilters,
+                      ),
+                      const SizedBox(width: 8),
+                      FilterDropdownChip(
+                        label: 'Label',
+                        onTap: _openSearchFilters,
+                      ),
+                      const SizedBox(width: 8),
+                      FilterDropdownChip(
+                        label: 'Range',
+                        onTap: _openSearchFilters,
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 32),
 
-                CategoriesSection(categories: categories),
+                CategoriesSection(
+                  categories: categories,
+                  onCategoryTap: _openCategorySearch,
+                ),
                 const SizedBox(height: 32),
 
                 const Padding(
@@ -163,6 +180,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (!mounted) return;
 
     await _refreshHomeData();
+  }
+
+  void _openSearchFilters() {
+    context.pushNamed(
+      AppRouter.search,
+      queryParameters: const {'open_filter': '1'},
+    );
+  }
+
+  void _openCategorySearch(HomeCategory category) {
+    context.pushNamed(
+      AppRouter.search,
+      queryParameters: {
+        'category': category.key,
+        'category_title': category.title,
+      },
+    );
   }
 
   Future<void> _loadInitialLocation() async {

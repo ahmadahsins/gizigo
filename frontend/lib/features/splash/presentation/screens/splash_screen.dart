@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -19,7 +21,9 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     _navigationTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
-      context.goNamed(AppRouter.welcome);
+      final isLoggedIn =
+          Firebase.apps.isNotEmpty && FirebaseAuth.instance.currentUser != null;
+      context.goNamed(isLoggedIn ? AppRouter.home : AppRouter.welcome);
     });
   }
 

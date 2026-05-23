@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../home/data/models/home_category.dart';
 import '../../../home/presentation/widgets/featured_food_card.dart';
-import '../../domain/entities/search_category.dart';
 import '../../domain/entities/search_food_item.dart';
 import 'search_section_title.dart';
 
@@ -13,17 +13,21 @@ class SearchDiscoveryContent extends StatelessWidget {
     required this.horizontalPadding,
     required this.history,
     required this.categories,
-    required this.featuredFood,
     required this.onHistoryTap,
     required this.onCategoryTap,
+    this.featuredFood,
+    this.onFeaturedTap,
+    this.isLoadingFeatured = false,
   });
 
   final double horizontalPadding;
   final List<String> history;
-  final List<SearchCategory> categories;
-  final SearchFoodItem featuredFood;
+  final List<HomeCategory> categories;
+  final SearchFoodItem? featuredFood;
   final ValueChanged<String> onHistoryTap;
-  final ValueChanged<String> onCategoryTap;
+  final ValueChanged<HomeCategory> onCategoryTap;
+  final VoidCallback? onFeaturedTap;
+  final bool isLoadingFeatured;
 
   @override
   Widget build(BuildContext context) {
@@ -49,13 +53,19 @@ class SearchDiscoveryContent extends StatelessWidget {
           const SizedBox(height: 43),
           const SearchSectionTitle('You Might Like This'),
           const SizedBox(height: 17),
-          FeaturedFoodCard(
-            imageUrl: featuredFood.imageUrl,
-            title: featuredFood.title,
-            merchant: featuredFood.subtitle,
-            price: featuredFood.price,
-            ratingText: featuredFood.ratingText,
-          ),
+          if (isLoadingFeatured)
+            const _FeaturedLoadingCard()
+          else if (featuredFood != null)
+            FeaturedFoodCard(
+              imageUrl: featuredFood!.imageUrl,
+              title: featuredFood!.title,
+              merchant: featuredFood!.subtitle,
+              price: featuredFood!.price,
+              ratingText: featuredFood!.ratingText,
+              onViewFullMenuTap: onFeaturedTap,
+            )
+          else
+            const _FeaturedEmptyState(),
         ],
       ),
     );
@@ -125,8 +135,8 @@ class _HistoryChip extends StatelessWidget {
 class _CategoriesGrid extends StatelessWidget {
   const _CategoriesGrid({required this.categories, required this.onTap});
 
-  final List<SearchCategory> categories;
-  final ValueChanged<String> onTap;
+  final List<HomeCategory> categories;
+  final ValueChanged<HomeCategory> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +151,7 @@ class _CategoriesGrid extends StatelessWidget {
               width: itemWidth,
               child: _CategoryCard(
                 category: category,
-                onTap: () => onTap(category.title),
+                onTap: () => onTap(category),
               ),
             );
           }).toList(),
@@ -154,7 +164,7 @@ class _CategoriesGrid extends StatelessWidget {
 class _CategoryCard extends StatelessWidget {
   const _CategoryCard({required this.category, required this.onTap});
 
-  final SearchCategory category;
+  final HomeCategory category;
   final VoidCallback onTap;
 
   @override
@@ -181,7 +191,7 @@ class _CategoryCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: SvgPicture.asset(category.iconPath, fit: BoxFit.contain),
+            child: SvgPicture.asset(category.iconAsset, fit: BoxFit.contain),
           ),
           const SizedBox(height: 7),
           Text(
@@ -197,6 +207,45 @@ class _CategoryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FeaturedLoadingCard extends StatelessWidget {
+  const _FeaturedLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 292,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+      ),
+      child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _FeaturedEmptyState extends StatelessWidget {
+  const _FeaturedEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+      ),
+      child: Text(
+        'No featured food available yet.',
+        style: AppTextStyles.bodyMedium,
       ),
     );
   }

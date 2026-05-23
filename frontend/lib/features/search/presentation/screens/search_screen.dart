@@ -1,7 +1,16 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../data/search_mock_data.dart';
+import '../../../../core/models/nutrition_grade.dart';
+import '../../../../core/network/dio_client.dart';
+import '../../../../router/app_router.dart';
+import '../../../home/data/models/home_category.dart';
+import '../../../location/data/location_storage_service.dart';
+import '../../../location/domain/entities/location_item.dart';
+import '../../data/search_remote_data_source.dart';
 import '../../domain/entities/search_food_item.dart';
 import '../widgets/label_filter_bottom_sheet.dart';
 import '../widgets/price_filter_bottom_sheet.dart';
@@ -11,9 +20,20 @@ import '../widgets/search_filters_bottom_sheet.dart';
 import '../widgets/search_header.dart';
 import '../widgets/search_results_content.dart';
 
-/// Search Screen - Search food by name/description.
+/// Search Screen - Search food by name, category, nutrition label, price, and range.
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({
+    super.key,
+    this.initialQuery,
+    this.initialCategoryKey,
+    this.initialCategoryTitle,
+    this.openFilterOnStart = false,
+  });
+
+  final String? initialQuery;
+  final String? initialCategoryKey;
+  final String? initialCategoryTitle;
+  final bool openFilterOnStart;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -29,43 +49,22 @@ class _SearchScreenState extends State<SearchScreen> {
   final List<String> _searchHistory = [];
   final Set<String> _selectedLabels = {};
   final Set<String> _selectedRanges = {};
+  final LocationStorageService _locationStorage =
+      const LocationStorageService();
+  late final SearchRemoteDataSource _searchRemoteDataSource;
+
   RangeValues _selectedPriceRange = PriceFilterBottomSheet.defaultRange;
-
+  Timer? _searchDebounce;
   String _query = '';
-
-  List<SearchFoodItem> get _filteredFoods {
-    final normalizedQuery = _query.trim().toLowerCase();
-    if (normalizedQuery.isEmpty) return const [];
-
-    var matches = searchFoods.where((food) {
-      return food.title.toLowerCase().contains(normalizedQuery) ||
-          food.subtitle.toLowerCase().contains(normalizedQuery);
-    });
-
-    if (_selectedLabels.isNotEmpty) {
-      matches = matches.where((food) {
-        return _selectedLabels.contains(food.ratingText);
-      });
-    }
-
-    if (_hasPriceFilter) {
-      matches = matches.where((food) {
-        final price = _parseRupiah(food.price);
-        return price >= _selectedPriceRange.start &&
-            price <= _selectedPriceRange.end;
-      });
-    }
-
-    if (_selectedRanges.isNotEmpty) {
-      matches = matches.where((food) {
-        return _selectedRanges.any((range) {
-          return _matchesDistanceRange(food.distanceKm, range);
-        });
-      });
-    }
-
-    return matches.toList();
-  }
+  String? _selectedCategoryKey;
+  LocationItem? _selectedLocation;
+  List<HomeCategory> _categories = const [];
+  SearchFoodItem? _featuredFood;
+  List<SearchFoodItem> _foods = const [];
+  Object? _searchError;
+  bool _isLoadingSearch = false;
+  bool _isLoadingDiscovery = true;
+  int _searchGeneration = 0;
 
   List<String> get _latestSearchHistory => _searchHistory.take(4).toList();
 
@@ -77,17 +76,37 @@ class _SearchScreenState extends State<SearchScreen> {
   bool get _hasAnyFilter {
     return _hasPriceFilter ||
         _selectedLabels.isNotEmpty ||
-        _selectedRanges.isNotEmpty;
+        _selectedRanges.isNotEmpty ||
+        _selectedCategoryKey != null;
+  }
+
+  bool get _hasSearchRequest {
+    return _query.trim().isNotEmpty || _hasAnyFilter;
   }
 
   @override
   void initState() {
     super.initState();
+    _searchRemoteDataSource = SearchRemoteDataSource(DioClient());
+    _selectedCategoryKey = _cleanText(widget.initialCategoryKey);
+    final initialQuery = _cleanText(widget.initialQuery);
+    if (initialQuery != null) {
+      _searchController.text = initialQuery;
+      _query = initialQuery;
+    }
     _searchController.addListener(_handleSearchChanged);
+    Future.microtask(_loadInitialData);
+
+    if (widget.openFilterOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handleFilterTap();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -133,26 +152,33 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: GestureDetector(
                       behavior: HitTestBehavior.translucent,
                       onTap: _unfocusSearch,
-                      child: hasQuery
+                      child: _hasSearchRequest
                           ? SearchResultsContent(
                               horizontalPadding: horizontalPadding,
-                              foods: _filteredFoods,
+                              foods: _foods,
                               onFilterTap: _handleFilterTap,
                               onPriceFilterTap: _handlePriceFilterTap,
                               onLabelFilterTap: _handleLabelFilterTap,
                               onRangeFilterTap: _handleRangeFilterTap,
+                              onFoodTap: _openFoodDetail,
                               hasAnyFilter: _hasAnyFilter,
                               hasPriceFilter: _hasPriceFilter,
                               hasLabelFilter: _selectedLabels.isNotEmpty,
                               hasRangeFilter: _selectedRanges.isNotEmpty,
+                              isLoading: _isLoadingSearch,
+                              errorMessage: _searchErrorMessage(_searchError),
                             )
                           : SearchDiscoveryContent(
                               horizontalPadding: horizontalPadding,
                               history: _latestSearchHistory,
-                              categories: searchCategories,
-                              featuredFood: featuredSearchFood,
+                              categories: _categories,
+                              featuredFood: _featuredFood,
+                              isLoadingFeatured: _isLoadingDiscovery,
                               onHistoryTap: _selectSearchText,
-                              onCategoryTap: _selectSearchText,
+                              onCategoryTap: _selectCategory,
+                              onFeaturedTap: _featuredFood == null
+                                  ? null
+                                  : () => _openFoodDetail(_featuredFood!),
                             ),
                     ),
                   ),
@@ -165,8 +191,166 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Future<void> _loadInitialData() async {
+    _selectedLocation = await _locationStorage.readSelectedLocation();
+
+    await Future.wait([_loadCategories(), _loadFeaturedFood()]);
+
+    if (_hasSearchRequest) {
+      _runSearch(showLoading: true);
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await _searchRemoteDataSource.getCategories();
+      if (!mounted) return;
+
+      setState(() => _categories = categories);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _categories = const []);
+    }
+  }
+
+  Future<void> _loadFeaturedFood() async {
+    setState(() => _isLoadingDiscovery = true);
+
+    try {
+      final location = _selectedLocation;
+      final featured = await _searchRemoteDataSource.getFeaturedFood(
+        lat: location?.latitude,
+        lng: location?.longitude,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _featuredFood = featured;
+        _isLoadingDiscovery = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingDiscovery = false);
+    }
+  }
+
   void _handleSearchChanged() {
-    setState(() => _query = _searchController.text);
+    final value = _searchController.text;
+    if (value == _query) return;
+
+    setState(() {
+      _query = value;
+      _selectedCategoryKey = null;
+    });
+
+    _scheduleSearch();
+  }
+
+  void _scheduleSearch() {
+    _searchDebounce?.cancel();
+    if (!_hasSearchRequest) {
+      _searchGeneration++;
+      setState(() {
+        _foods = const [];
+        _searchError = null;
+        _isLoadingSearch = false;
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      _runSearch(showLoading: true);
+    });
+  }
+
+  Future<void> _runSearch({required bool showLoading}) async {
+    final generation = ++_searchGeneration;
+    if (showLoading) {
+      setState(() {
+        _isLoadingSearch = true;
+        _searchError = null;
+      });
+    }
+
+    try {
+      final response = await _searchRemoteDataSource.searchFoods(
+        query: _query,
+        categoryKey: _selectedCategoryKey,
+        nutritionGrade: _selectedNutritionGradeQuery,
+        minPrice: _hasPriceFilter ? _selectedPriceRange.start : null,
+        maxPrice: _hasPriceFilter ? _selectedPriceRange.end : null,
+        lat: _selectedLocation?.latitude,
+        lng: _selectedLocation?.longitude,
+        maxDistanceKm: _maxDistanceQuery,
+      );
+
+      if (!mounted || generation != _searchGeneration) return;
+
+      setState(() {
+        _foods = _applyDistanceFilters(response.items);
+        _searchError = null;
+        _isLoadingSearch = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _searchGeneration) return;
+
+      setState(() {
+        _foods = const [];
+        _searchError = error;
+        _isLoadingSearch = false;
+      });
+    }
+  }
+
+  String? get _selectedNutritionGradeQuery {
+    if (_selectedLabels.length != 1) return null;
+
+    final grade = NutritionGrade.tryParse(_selectedLabels.first);
+    return switch (grade) {
+      NutritionGrade.good => 'GOOD',
+      NutritionGrade.veryGood => 'VERY_GOOD',
+      NutritionGrade.excellent => 'EXCELLENT',
+      null => null,
+    };
+  }
+
+  double? get _maxDistanceQuery {
+    if (_selectedLocation == null || _selectedRanges.isEmpty) return null;
+    if (_selectedRanges.contains(RangeFilterBottomSheet.moreThanFiveKm)) {
+      return null;
+    }
+    if (_selectedRanges.contains(RangeFilterBottomSheet.twoToFiveKm)) {
+      return 5;
+    }
+    if (_selectedRanges.contains(RangeFilterBottomSheet.lessThanTwoKm)) {
+      return 2;
+    }
+    return null;
+  }
+
+  List<SearchFoodItem> _applyDistanceFilters(List<SearchFoodItem> items) {
+    var results = items;
+
+    if (_selectedLabels.length > 1) {
+      results = results
+          .where((food) {
+            return _selectedLabels.contains(food.ratingText);
+          })
+          .toList(growable: false);
+    }
+
+    if (_selectedRanges.isEmpty) return results;
+
+    return results
+        .where((food) {
+          final distance = food.distanceKm;
+          if (distance == null) return false;
+
+          return _selectedRanges.any(
+            (range) => _matchesDistanceRange(distance, range),
+          );
+        })
+        .toList(growable: false);
   }
 
   void _submitSearch(String value) {
@@ -179,6 +363,7 @@ class _SearchScreenState extends State<SearchScreen> {
       );
       _searchHistory.insert(0, normalizedValue);
     });
+    _runSearch(showLoading: true);
   }
 
   void _selectSearchText(String value) {
@@ -190,9 +375,23 @@ class _SearchScreenState extends State<SearchScreen> {
     _submitSearch(value);
   }
 
+  void _selectCategory(HomeCategory category) {
+    _unfocusSearch();
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _selectedCategoryKey = category.key;
+    });
+    _runSearch(showLoading: true);
+  }
+
   void _clearSearch() {
     _searchController.clear();
+    setState(() {
+      _selectedCategoryKey = null;
+    });
     _searchFocusNode.requestFocus();
+    _scheduleSearch();
   }
 
   void _handleBack() {
@@ -201,7 +400,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    context.goNamed('home');
+    context.goNamed(AppRouter.home);
   }
 
   Future<void> _handleFilterTap() async {
@@ -235,6 +434,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ..clear()
         ..addAll(selectedFilters.selectedRanges);
     });
+    _runSearch(showLoading: true);
   }
 
   Future<void> _handlePriceFilterTap() async {
@@ -254,6 +454,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!mounted || selectedRange == null) return;
 
     setState(() => _selectedPriceRange = selectedRange);
+    _runSearch(showLoading: true);
   }
 
   Future<void> _handleLabelFilterTap() async {
@@ -277,6 +478,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ..clear()
         ..addAll(selectedLabels);
     });
+    _runSearch(showLoading: true);
   }
 
   Future<void> _handleRangeFilterTap() async {
@@ -300,15 +502,17 @@ class _SearchScreenState extends State<SearchScreen> {
         ..clear()
         ..addAll(selectedRanges);
     });
+    _runSearch(showLoading: true);
+  }
+
+  void _openFoodDetail(SearchFoodItem food) {
+    if (food.id.isEmpty) return;
+
+    context.pushNamed(AppRouter.foodDetail, pathParameters: {'id': food.id});
   }
 
   void _unfocusSearch() {
     FocusScope.of(context).unfocus();
-  }
-
-  double _parseRupiah(String value) {
-    final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
-    return double.tryParse(numericValue) ?? 0;
   }
 
   bool _matchesDistanceRange(double distanceKm, String range) {
@@ -318,5 +522,19 @@ class _SearchScreenState extends State<SearchScreen> {
       RangeFilterBottomSheet.moreThanFiveKm => distanceKm > 5,
       _ => false,
     };
+  }
+
+  String? _searchErrorMessage(Object? error) {
+    if (error == null) return null;
+    if (error is DioException && error.response?.statusCode == 401) {
+      return 'Session kamu belum valid. Silakan login ulang.';
+    }
+
+    return 'Search belum bisa dimuat. Cek koneksi atau backend, lalu coba lagi.';
+  }
+
+  String? _cleanText(String? value) {
+    final text = value?.trim();
+    return text == null || text.isEmpty ? null : text;
   }
 }

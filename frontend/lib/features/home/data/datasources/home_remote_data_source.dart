@@ -1,5 +1,6 @@
 import '../../../../../core/constants/api_constants.dart';
 import '../../../../../core/network/dio_client.dart';
+import '../models/home_category.dart';
 import '../models/home_food_item.dart';
 
 class HomeRecommendationsResponse {
@@ -43,6 +44,20 @@ class HomeRemoteDataSource {
         data['recommendations'],
       ).map(HomeFoodItem.fromJson).toList(growable: false),
     );
+  }
+
+  Future<List<HomeCategory>> getCategories() async {
+    final response = await _client.get(ApiConstants.metaFoodCategories);
+    final data = response.data;
+    if (data is! Map<String, dynamic>) return const [];
+
+    final items = data['items'];
+    if (items is! List) return const [];
+
+    return items
+        .whereType<Map>()
+        .map((item) => HomeCategory.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _listFrom(Object? value) {
