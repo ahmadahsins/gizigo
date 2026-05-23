@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { AuthModule } from '../auth/auth.module';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, CloudinaryModule],
   controllers: [UsersController],
   providers: [UsersService],
 })

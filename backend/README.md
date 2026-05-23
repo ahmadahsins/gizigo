@@ -7,7 +7,7 @@ REST API untuk aplikasi **GiziGo** (student food-discovery), dibangun dengan [Ne
 ## Prasyarat
 
 | Requirement | Versi |
-|-------------|-------|
+| ----------- | ----- |
 | Node.js     | 20.x  |
 | pnpm        | 10.x  |
 
@@ -36,32 +36,38 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
   Menu dengan grade di bawah `GOOD` ditolak dengan status `422`.
 - `PUT .../foods/:id` hanya menjalankan analisis ulang bila request membawa
   `recipe`; perubahan metadata tidak mengubah hasil gizi.
+- Foto tidak dikirim pada create menu. Setelah create sukses, unggah gambar
+  melalui `POST /merchant/foods/:id/photo` atau `POST /admin/foods/:id/photo`;
+  backend menyimpan URL Cloudinary pada `photo_url`.
 - `GET /foods/recommendations` memakai data profil dan preferensi untuk
   meranking menu tersedia. Bila AI tidak tersedia, endpoint menggunakan
   ranking lokal dan mengembalikan `context.recommendation_source: "fallback"`.
 
 ## Scripts
 
-| Command                | Fungsi                          |
-|------------------------|---------------------------------|
-| `pnpm run start:dev`   | Dev server + hot reload         |
-| `pnpm run build`       | Compile TypeScript ke `dist/`   |
-| `pnpm run start:prod`  | Jalankan production build       |
-| `pnpm run test`        | Unit tests                      |
-| `pnpm run test:e2e`    | End-to-end tests                |
-| `pnpm run seed:foods`  | Seed data makanan ke Firestore  |
+| Command               | Fungsi                         |
+| --------------------- | ------------------------------ |
+| `pnpm run start:dev`  | Dev server + hot reload        |
+| `pnpm run build`      | Compile TypeScript ke `dist/`  |
+| `pnpm run start:prod` | Jalankan production build      |
+| `pnpm run test`       | Unit tests                     |
+| `pnpm run test:e2e`   | End-to-end tests               |
+| `pnpm run seed:foods` | Seed data makanan ke Firestore |
 
 ## API Routes
 
-| Method  | Path                    | Auth   | Keterangan                        |
-|---------|-------------------------|--------|-----------------------------------|
-| `GET`   | `/`                     | —      | Health check                      |
-| `GET`   | `/meta/*`               | —      | Metadata publik                   |
-| `POST`  | `/auth/signup`          | Bearer | Sync user setelah Firebase signup |
-| `GET`   | `/foods`                | Bearer | Daftar & search makanan           |
-| `GET`   | `/foods/recommendations`| Bearer | Rekomendasi home                  |
-| `PATCH` | `/users/me`             | Bearer | Update profil                     |
-| `GET`   | `/api`                  | —      | Swagger UI                        |
+| Method  | Path                        | Auth     | Keterangan                        |
+| ------- | --------------------------- | -------- | --------------------------------- |
+| `GET`   | `/`                         | —        | Health check                      |
+| `GET`   | `/meta/*`                   | —        | Metadata publik                   |
+| `POST`  | `/auth/signup`              | Bearer   | Sync user setelah Firebase signup |
+| `GET`   | `/foods`                    | Bearer   | Daftar & search makanan           |
+| `GET`   | `/foods/recommendations`    | Bearer   | Rekomendasi home                  |
+| `PATCH` | `/users/me`                 | Bearer   | Update profil                     |
+| `POST`  | `/users/me/photo`           | Bearer   | Upload foto profil ke Cloudinary  |
+| `POST`  | `/merchant/foods/:id/photo` | Merchant | Upload foto menu milik sendiri    |
+| `POST`  | `/admin/foods/:id/photo`    | Admin    | Upload foto menu                  |
+| `GET`   | `/api`                      | —        | Swagger UI                        |
 
 ---
 
@@ -75,12 +81,12 @@ Repo ini bagian dari monorepo `gizigo/`. Deploy dengan **Root Directory = `backe
 Request ─→ Vercel rewrite (/*) ─→ api/index.js ─→ dist/src/serverless.js ─→ Express/NestJS
 ```
 
-| File | Peran |
-|------|-------|
-| [`vercel.json`](vercel.json) | Build command, rewrites, function config |
-| [`api/index.js`](api/index.js) | Entry point serverless function Vercel |
+| File                                     | Peran                                                  |
+| ---------------------------------------- | ------------------------------------------------------ |
+| [`vercel.json`](vercel.json)             | Build command, rewrites, function config               |
+| [`api/index.js`](api/index.js)           | Entry point serverless function Vercel                 |
 | [`src/serverless.ts`](src/serverless.ts) | Bootstrap NestJS ke Express handler (Vercel `req/res`) |
-| [`src/main.ts`](src/main.ts) | Entry point development lokal (`pnpm start:dev`) |
+| [`src/main.ts`](src/main.ts)             | Entry point development lokal (`pnpm start:dev`)       |
 
 ### Langkah 1 — Konfigurasi Project
 
@@ -96,14 +102,14 @@ Request ─→ Vercel rewrite (/*) ─→ api/index.js ─→ dist/src/serverles
 
 Set di **Settings → Environment Variables** (centang Production + Preview):
 
-| Variable               | Keterangan                                         |
-|------------------------|----------------------------------------------------|
-| `FIREBASE_PROJECT_ID`  | Firebase project ID                                |
-| `FIREBASE_CLIENT_EMAIL`| Service account email                              |
-| `FIREBASE_PRIVATE_KEY` | Private key (gunakan literal `\n` antar baris)     |
-| `GEMINI_API_KEY`       | API key Gemini untuk analisis/rekomendasi AI        |
-| `GEMINI_MODEL`         | Model Gemini opsional; default `gemini-2.5-flash`  |
-| `GEMINI_TIMEOUT_MS`    | Timeout request AI opsional; default `10000` ms     |
+| Variable                | Keterangan                                        |
+| ----------------------- | ------------------------------------------------- |
+| `FIREBASE_PROJECT_ID`   | Firebase project ID                               |
+| `FIREBASE_CLIENT_EMAIL` | Service account email                             |
+| `FIREBASE_PRIVATE_KEY`  | Private key (gunakan literal `\n` antar baris)    |
+| `GEMINI_API_KEY`        | API key Gemini untuk analisis/rekomendasi AI      |
+| `GEMINI_MODEL`          | Model Gemini opsional; default `gemini-2.5-flash` |
+| `GEMINI_TIMEOUT_MS`     | Timeout request AI opsional; default `10000` ms   |
 
 Format `FIREBASE_PRIVATE_KEY`:
 
@@ -136,11 +142,11 @@ vercel dev
 
 ### Troubleshooting
 
-| Gejala | Penyebab & Solusi |
-|--------|-------------------|
-| `NOT_FOUND` di semua route | Rewrites tidak aktif — pastikan [`vercel.json`](vercel.json) punya entry `"rewrites": [{ "source": "/(.*)", "destination": "/api" }]` |
-| Build error: `public` not found | Folder [`public/.gitkeep`](public/.gitkeep) harus ada di repo (Framework **Other** membutuhkan output directory) |
-| `500 FUNCTION_INVOCATION_FAILED` | Cek **Runtime Logs** di dashboard Vercel. Kemungkinan: `dist/` tidak ter-copy ke `api/dist/` — pastikan build command di `vercel.json` mencakup `cp -r dist api/dist` |
+| Gejala                             | Penyebab & Solusi                                                                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NOT_FOUND` di semua route         | Rewrites tidak aktif — pastikan [`vercel.json`](vercel.json) punya entry `"rewrites": [{ "source": "/(.*)", "destination": "/api" }]`                                    |
+| Build error: `public` not found    | Folder [`public/.gitkeep`](public/.gitkeep) harus ada di repo (Framework **Other** membutuhkan output directory)                                                         |
+| `500 FUNCTION_INVOCATION_FAILED`   | Cek **Runtime Logs** di dashboard Vercel. Kemungkinan: `dist/` tidak ter-copy ke `api/dist/` — pastikan build command di `vercel.json` mencakup `cp -r dist api/dist`    |
 | `Unable to determine event source` | Handler serverless masih menggunakan adapter AWS Lambda (`@vendia/serverless-express`). Ganti ke direct Express handler — lihat [`src/serverless.ts`](src/serverless.ts) |
 
 ---
@@ -149,8 +155,8 @@ vercel dev
 
 Jika Vercel bermasalah, deploy sebagai Node.js server biasa:
 
-| Platform | Root | Build | Start |
-|----------|------|-------|-------|
+| Platform                       | Root      | Build                        | Start            |
+| ------------------------------ | --------- | ---------------------------- | ---------------- |
 | [Railway](https://railway.app) | `backend` | `pnpm install && pnpm build` | `node dist/main` |
 | [Render](https://render.com)   | `backend` | `pnpm install && pnpm build` | `node dist/main` |
 
@@ -159,3 +165,18 @@ Jika Vercel bermasalah, deploy sebagai Node.js server biasa:
 ## Environment
 
 Lihat [`.env.example`](.env.example) untuk daftar lengkap variabel yang diperlukan.
+
+### Upload Foto Profil
+
+Kirim `multipart/form-data` ke `POST /users/me/photo` dengan field `file`.
+File yang diterima adalah JPEG, PNG, atau WebP hingga 5 MB. Response berupa
+profil user terbaru dengan field `profile_photo_url`; upload baru mengganti
+aset Cloudinary user sebelumnya.
+
+### Upload Foto Menu
+
+Create menu tidak menerima `photo_url`. Setelah endpoint create mengembalikan
+`id`, kirim `multipart/form-data` dengan field `file` ke
+`POST /merchant/foods/:id/photo` atau `POST /admin/foods/:id/photo`. File yang
+diterima adalah JPEG, PNG, atau WebP hingga 5 MB; URL hasil Cloudinary disimpan
+backend ke `photo_url`. Upload foto tidak menjalankan analisis gizi ulang.

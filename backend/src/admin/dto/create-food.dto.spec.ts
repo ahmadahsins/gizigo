@@ -6,7 +6,6 @@ describe('CreateFoodDto recipe validation', () => {
   const validBody = {
     name: 'Sup sehat',
     description: 'Menu hangat',
-    photo_url: 'https://example.com/soup.jpg',
     food_category: 'main_course',
     health_labels: ['Low Fat'],
     base_price: 15000,
@@ -18,7 +17,7 @@ describe('CreateFoodDto recipe validation', () => {
     },
   };
 
-  it('accepts a supported measured recipe', async () => {
+  it('accepts a supported measured recipe without a photo url', async () => {
     const errors = await validate(plainToInstance(CreateFoodDto, validBody));
 
     expect(errors).toHaveLength(0);

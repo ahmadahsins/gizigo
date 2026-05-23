@@ -13,7 +13,6 @@ describe('FoodsManagementService', () => {
   const baseFoodDto = {
     name: 'Ayam goreng',
     description: 'Crispy chicken',
-    photo_url: 'https://example.com/food.jpg',
     food_category: 'main_course',
     health_labels: ['High Protein'],
     base_price: 17000,
@@ -46,6 +45,7 @@ describe('FoodsManagementService', () => {
     where: jest.Mock;
   };
   let analyzeRecipe: jest.Mock;
+  let uploadFoodPhoto: jest.Mock;
   let service: FoodsManagementService;
 
   beforeEach(() => {
@@ -79,11 +79,17 @@ describe('FoodsManagementService', () => {
       }),
     };
     analyzeRecipe = jest.fn().mockResolvedValue(acceptedAssessment);
+    uploadFoodPhoto = jest
+      .fn()
+      .mockResolvedValue('https://res.cloudinary.com/demo/foods/food1.jpg');
 
     service = new FoodsManagementService(
       firebaseService as never,
       {
         analyzeRecipe,
+      } as never,
+      {
+        uploadFoodPhoto,
       } as never,
     );
   });
@@ -111,6 +117,9 @@ describe('FoodsManagementService', () => {
     );
     expect(foodRef.set).toHaveBeenCalledWith(
       expect.not.objectContaining({ recipe: expect.anything() }),
+    );
+    expect(foodRef.set).toHaveBeenCalledWith(
+      expect.not.objectContaining({ photo_url: expect.anything() }),
     );
   });
 
@@ -240,6 +249,49 @@ describe('FoodsManagementService', () => {
         merchant_id: 'merchant_b',
       }),
     );
+  });
+
+  it('uploads a photo for a food owned by the merchant', async () => {
+    foodRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ merchant_id: 'merchant_a' }),
+    });
+
+    const result = await service.uploadFoodPhoto(
+      'food1',
+      { buffer: Buffer.from('image') },
+      { role: UserRole.MERCHANT, merchantId: 'merchant_a' },
+    );
+
+    expect(uploadFoodPhoto).toHaveBeenCalledWith('food1', Buffer.from('image'));
+    expect(foodRef.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photo_url: 'https://res.cloudinary.com/demo/foods/food1.jpg',
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        food_id: 'food1',
+        photo_url: 'https://res.cloudinary.com/demo/foods/food1.jpg',
+      }),
+    );
+  });
+
+  it('does not upload a photo for another merchants food', async () => {
+    foodRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ merchant_id: 'merchant_b' }),
+    });
+
+    await expect(
+      service.uploadFoodPhoto(
+        'food1',
+        { buffer: Buffer.from('image') },
+        { role: UserRole.MERCHANT, merchantId: 'merchant_a' },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(uploadFoodPhoto).not.toHaveBeenCalled();
+    expect(foodRef.update).not.toHaveBeenCalled();
   });
 
   it('throws when deleting missing food', async () => {

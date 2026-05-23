@@ -100,10 +100,6 @@ export class CreateFoodDto {
   @IsString()
   description!: string;
 
-  @ApiProperty()
-  @IsUrl()
-  photo_url!: string;
-
   @ApiProperty({
     enum: FOOD_CATEGORY_KEYS,
     description: 'Menu category (horizontal chips on home)',

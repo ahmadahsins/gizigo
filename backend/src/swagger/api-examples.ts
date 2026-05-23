@@ -5,6 +5,8 @@ export const AUTH_SYNC_RESPONSE_EXAMPLE = {
   uid: 'firebaseUidExample123',
   role: 'customer',
   merchant_id: null,
+  profile_photo_url:
+    'https://res.cloudinary.com/demo/image/upload/gizigo/profile-photos/firebaseUidExample123.jpg',
 };
 
 export const AUTH_MERCHANT_SIGNUP_BODY_EXAMPLE = {
@@ -42,7 +44,6 @@ export const ADMIN_CREATE_MERCHANT_BODY_EXAMPLE = {
 export const MERCHANT_CREATE_FOOD_BODY_EXAMPLE = {
   name: 'Ayam goreng',
   description: 'Ayam goreng renyah',
-  photo_url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
   food_category: 'main_course',
   health_labels: ['High Protein'],
   base_price: 17000,
@@ -173,7 +174,6 @@ export const RECOMMENDATIONS_RESPONSE_EXAMPLE = {
 export const ADMIN_CREATE_FOOD_BODY_EXAMPLE = {
   name: 'Ayam goreng',
   description: 'Ayam goreng renyah',
-  photo_url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
   food_category: 'main_course',
   health_labels: ['High Protein'],
   base_price: 17000,

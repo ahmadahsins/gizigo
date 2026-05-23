@@ -13,6 +13,8 @@ import { UpdateFoodDto } from '../admin/dto/update-food.dto';
 import { CreateMerchantFoodDto } from '../merchant/dto/create-merchant-food.dto';
 import { UpdateMerchantFoodDto } from '../merchant/dto/update-merchant-food.dto';
 import { AiService, NutritionAssessment } from '../ai/ai.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 
 export interface FoodActorContext {
   role: UserRole;
@@ -24,6 +26,7 @@ export class FoodsManagementService {
   constructor(
     private readonly firebaseService: FirebaseService,
     private readonly aiService: AiService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   private db() {
@@ -95,6 +98,40 @@ export class FoodsManagementService {
       };
     } catch {
       throw new InternalServerErrorException('Failed to update food');
+    }
+  }
+
+  async uploadFoodPhoto(
+    id: string,
+    file: UploadedImageFile,
+    actor: FoodActorContext,
+  ) {
+    const foodRef = this.db().collection('foods').doc(id);
+    const doc = await foodRef.get();
+
+    if (!doc.exists) {
+      throw new NotFoundException('Food not found');
+    }
+
+    this.assertFoodOwnership(doc.data()!, actor);
+
+    const photoUrl = await this.cloudinaryService.uploadFoodPhoto(
+      id,
+      file.buffer,
+    );
+
+    try {
+      await foodRef.update({
+        photo_url: photoUrl,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {
+        message: 'Food photo uploaded successfully',
+        food_id: id,
+        photo_url: photoUrl,
+      };
+    } catch {
+      throw new InternalServerErrorException('Failed to update food photo');
     }
   }
 
@@ -195,7 +232,6 @@ export class FoodsManagementService {
     const payload: Record<string, unknown> = {
       name: dto.name,
       description: dto.description,
-      photo_url: dto.photo_url,
       nutrition_grade: assessment.grade,
       food_category: dto.food_category,
       health_labels: dto.health_labels,

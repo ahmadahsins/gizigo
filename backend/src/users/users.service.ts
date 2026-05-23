@@ -5,12 +5,17 @@ import { RecordRecentlyViewedDto } from './dto/record-recently-viewed.dto';
 import { RecordRecentLocationDto } from './dto/record-recent-location.dto';
 import { RecentlyViewedQueryDto } from './dto/recently-viewed-query.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 
 type StoredRecord = Record<string, unknown>;
 
 @Injectable()
 export class UsersService {
-  constructor(private firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   private db() {
     return this.firebaseService.getFirestore();
@@ -40,6 +45,30 @@ export class UsersService {
     patch['updated_at'] = admin.firestore.FieldValue.serverTimestamp();
 
     await ref.set(patch, { merge: true });
+    return this.getProfile(uid);
+  }
+
+  async uploadProfilePhoto(uid: string, file: UploadedImageFile) {
+    const ref = this.db().collection('users').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new NotFoundException(
+        'User not found - call POST /auth/sync (or /auth/signup) first',
+      );
+    }
+
+    const profilePhotoUrl = await this.cloudinaryService.uploadProfilePhoto(
+      uid,
+      file.buffer,
+    );
+    await ref.set(
+      {
+        profile_photo_url: profilePhotoUrl,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
     return this.getProfile(uid);
   }
 
@@ -180,6 +209,7 @@ export class UsersService {
       username: data['username'] ?? data['name'] ?? null,
       role: data['role'] ?? 'customer',
       merchant_id: data['merchant_id'] ?? null,
+      profile_photo_url: data['profile_photo_url'] ?? null,
       gender: data['gender'] ?? null,
       age: data['age'] ?? null,
       weight_kg: data['weight_kg'] ?? null,
