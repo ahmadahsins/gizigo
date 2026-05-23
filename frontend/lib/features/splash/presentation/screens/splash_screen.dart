@@ -12,12 +12,21 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  Timer? _navigationTimer;
+
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 3), () {
+    _navigationTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
       context.goNamed(AppRouter.welcome);
     });
+  }
+
+  @override
+  void dispose() {
+    _navigationTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -25,10 +34,7 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF1B6D24),
       body: Center(
-        child: SvgPicture.asset(
-          'assets/images/Logo - White.svg',
-          width: 200,
-        ),
+        child: SvgPicture.asset('assets/images/Logo - White.svg', width: 200),
       ),
     );
   }
