@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../router/app_router.dart';
 
 class HomeHeader extends StatelessWidget {
   const HomeHeader({
     super.key,
+    required this.userName,
     required this.locationName,
     required this.onLocationTap,
+    required this.onProfileTap,
   });
 
-  final String locationName;
+  final String userName;
+  final String? locationName;
   final VoidCallback onLocationTap;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +27,9 @@ class HomeHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hi, GiziGang 👋',
+                'Hi, $userName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.lexend(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -54,7 +58,7 @@ class HomeHeader extends StatelessWidget {
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              locationName,
+                              locationName ?? 'Set your location',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
@@ -84,7 +88,7 @@ class HomeHeader extends StatelessWidget {
           button: true,
           label: 'Open profile',
           child: InkWell(
-            onTap: () => context.pushNamed(AppRouter.profile),
+            onTap: onProfileTap,
             customBorder: const CircleBorder(),
             child: const CircleAvatar(
               radius: 24,

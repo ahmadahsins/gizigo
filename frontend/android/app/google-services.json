@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "692659354222",
+    "project_id": "gdgoc-gizigo",
+    "storage_bucket": "gdgoc-gizigo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:692659354222:android:0939cd408e88ebde55847f",
+        "android_client_info": {
+          "package_name": "com.gizigo.gizigo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "692659354222-a8omufecgnlvgaah7l4cgn3jq864505g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTvGR8D7w7fzsL46PuAZNfZGH172KdzRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "692659354222-a8omufecgnlvgaah7l4cgn3jq864505g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -8,6 +8,7 @@ class AuthDropdownField extends StatelessWidget {
   final List<String> items;
   final String? initialValue;
   final ValueChanged<String?> onChanged;
+  final String? Function(String?)? validator;
 
   const AuthDropdownField({
     super.key,
@@ -16,6 +17,7 @@ class AuthDropdownField extends StatelessWidget {
     required this.items,
     this.initialValue,
     required this.onChanged,
+    this.validator,
   });
 
   @override
@@ -38,6 +40,7 @@ class AuthDropdownField extends StatelessWidget {
         DropdownButtonFormField<String>(
           initialValue: initialValue,
           onChanged: onChanged,
+          validator: validator,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: GoogleFonts.inter(
@@ -47,14 +50,20 @@ class AuthDropdownField extends StatelessWidget {
             ),
             filled: true,
             fillColor: const Color(0xFFF3F2F2),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFD1D1D1), width: 1),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
             ),
           ),
           icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),

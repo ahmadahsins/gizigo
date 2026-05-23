@@ -18,7 +18,7 @@ class LabelFilterBottomSheet extends StatefulWidget {
       shadowColor: Color(0xFFBDE9C6),
     ),
     LabelFilterOption(
-      label: 'Very good',
+      label: 'Very Good',
       backgroundColor: Color(0xFF156F24),
       foregroundColor: Colors.white,
       shadowColor: Color(0xFF0B3514),

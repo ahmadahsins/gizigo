@@ -1,7 +1,14 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/services/auto_refresh_service.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_text_styles.dart';
 import '../../../../router/app_router.dart';
 import '../../../location/domain/entities/location_item.dart';
+import '../../data/models/home_food_item.dart';
+import '../providers/home_providers.dart';
 import '../widgets/home_header.dart';
 import '../widgets/custom_search_bar.dart';
 import '../widgets/filter_dropdown_chip.dart';
@@ -10,121 +17,125 @@ import '../widgets/categories_section.dart';
 import '../widgets/featured_food_card.dart';
 import '../widgets/recommendation_card.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  String _locationName = 'UGM, Yogyakarta';
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with AutoRefreshStateMixin<HomeScreen> {
+  LocationItem? _selectedLocation;
+
+  HomeRequest get _homeRequest {
+    final location = _selectedLocation;
+
+    return HomeRequest(lat: location?.latitude, lng: location?.longitude);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_loadInitialLocation);
+  }
+
+  @override
+  Future<void> onAutoRefresh() {
+    return _refreshHomeData();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final request = _homeRequest;
+    final categories = ref.watch(homeCategoriesProvider);
+    final userName = ref.watch(homeUserNameProvider).valueOrNull ?? 'there';
+    final homeAsync = ref.watch(homeDataProvider(request));
+    final homeData = homeAsync.valueOrNull;
+    final isInitialLoading = homeAsync.isLoading && homeData == null;
+    final recommendationsError = homeData?.recommendationsError;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header & Location Selector
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: HomeHeader(
-                  locationName: _locationName,
-                  onLocationTap: _openLocationSelection,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _refreshHomeData,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: HomeHeader(
+                    userName: userName,
+                    locationName: _selectedLocation?.name,
+                    onLocationTap: _openLocationSelection,
+                    onProfileTap: _openProfile,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Search Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: CustomSearchBar(
-                  onTap: () => context.pushNamed(AppRouter.search),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: CustomSearchBar(
+                    onTap: () => context.pushNamed(AppRouter.search),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // Horizontal Filter Chips
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  children: const [
-                    FilterDropdownChip(label: 'Filters'),
-                    SizedBox(width: 8),
-                    FilterDropdownChip(label: 'Price'),
-                    SizedBox(width: 8),
-                    FilterDropdownChip(label: 'Label'),
-                    SizedBox(width: 8),
-                    FilterDropdownChip(label: 'Range'),
-                  ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: const [
+                      FilterDropdownChip(label: 'Filters'),
+                      SizedBox(width: 8),
+                      FilterDropdownChip(label: 'Price'),
+                      SizedBox(width: 8),
+                      FilterDropdownChip(label: 'Label'),
+                      SizedBox(width: 8),
+                      FilterDropdownChip(label: 'Range'),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-              // Categories Section
-              const CategoriesSection(),
-              const SizedBox(height: 32),
+                CategoriesSection(categories: categories),
+                const SizedBox(height: 32),
 
-              // Featured Food Section
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: SectionHeader(title: 'You Might Like This'),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: FeaturedFoodCard(
-                  imageUrl: '',
-                  title: 'Ayam goreng',
-                  merchant: 'Warteg Sendowo',
-                  price: 'Rp17.000',
-                  ratingText: 'Excellent',
-                  onViewFullMenuTap: () {},
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: SectionHeader(title: 'You Might Like This'),
                 ),
-              ),
-              const SizedBox(height: 32),
-
-              // Recommendations Section
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: SectionHeader(title: 'Recommendations for You'),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    RecommendationCard(
-                      imageUrl: '',
-                      title: 'Lorem ipsum',
-                      subtitle: 'Lorem ipsum',
-                      price: 'Rp16.000',
-                      ratingText: 'Excellent',
-                    ),
-                    RecommendationCard(
-                      imageUrl: '',
-                      title: 'Lorem ipsum',
-                      subtitle: 'Lorem ipsum',
-                      price: 'Rp14.000',
-                      ratingText: 'Very good',
-                    ),
-                    RecommendationCard(
-                      imageUrl: '',
-                      title: 'Lorem ipsum',
-                      subtitle: 'Lorem ipsum',
-                      price: 'Rp15.500',
-                      ratingText: 'Excellent',
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _buildFeaturedSection(
+                    featured: homeData?.featured ?? const [],
+                    isLoading: isInitialLoading,
+                    error: recommendationsError,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 32),
+
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: SectionHeader(title: 'Recommendations for You'),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _buildRecommendationsSection(
+                    foods: homeData?.recommendations ?? const [],
+                    isLoading: isInitialLoading,
+                    error: recommendationsError,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -137,6 +148,179 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!mounted || selectedLocation == null) return;
 
-    setState(() => _locationName = selectedLocation.name);
+    await ref
+        .read(locationStorageServiceProvider)
+        .saveSelectedLocation(selectedLocation);
+
+    setState(() {
+      _selectedLocation = selectedLocation;
+    });
+    AutoRefreshService.instance.refreshNow();
+  }
+
+  Future<void> _openProfile() async {
+    await context.pushNamed(AppRouter.profile);
+    if (!mounted) return;
+
+    await _refreshHomeData();
+  }
+
+  Future<void> _loadInitialLocation() async {
+    final location = await ref.read(selectedLocationProvider.future);
+    if (!mounted || location == null) return;
+
+    setState(() => _selectedLocation = location);
+  }
+
+  Future<void> _refreshHomeData() async {
+    final previousRequest = _homeRequest;
+
+    ref.invalidate(homeUserNameProvider);
+    ref.invalidate(selectedLocationProvider);
+    ref.invalidate(homeDataProvider(previousRequest));
+
+    try {
+      final location = await ref.read(selectedLocationProvider.future);
+      if (mounted) {
+        setState(() => _selectedLocation = location);
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    final nextRequest = _homeRequest;
+    ref.invalidate(homeDataProvider(nextRequest));
+    await ref.read(homeDataProvider(nextRequest).future);
+  }
+
+  Widget _buildFeaturedSection({
+    required List<HomeFoodItem> featured,
+    required bool isLoading,
+    required Object? error,
+  }) {
+    if (isLoading) return const _HomeLoadingCard(height: 292);
+
+    if (error != null) {
+      return _HomeEmptyState(message: _errorMessage(error));
+    }
+
+    final food = featured.firstOrNull;
+    if (food == null) {
+      return const _HomeEmptyState(message: 'No featured food available yet.');
+    }
+
+    return FeaturedFoodCard(
+      imageUrl: food.imageUrl,
+      title: food.name,
+      merchant: food.vendorName.isEmpty ? food.description : food.vendorName,
+      price: food.formattedPrice,
+      ratingText: food.ratingText,
+      onViewFullMenuTap: () => _openFoodDetail(food),
+    );
+  }
+
+  Widget _buildRecommendationsSection({
+    required List<HomeFoodItem> foods,
+    required bool isLoading,
+    required Object? error,
+  }) {
+    if (isLoading) {
+      return const Column(
+        children: [
+          _HomeLoadingCard(height: 88, margin: EdgeInsets.only(bottom: 16)),
+          _HomeLoadingCard(height: 88, margin: EdgeInsets.only(bottom: 16)),
+          _HomeLoadingCard(height: 88, margin: EdgeInsets.only(bottom: 16)),
+        ],
+      );
+    }
+
+    if (error != null) {
+      return _HomeEmptyState(message: _errorMessage(error));
+    }
+
+    if (foods.isEmpty) {
+      return const _HomeEmptyState(
+        message: 'No recommendations available yet.',
+      );
+    }
+
+    return Column(
+      children: foods.map((food) {
+        return RecommendationCard(
+          imageUrl: food.imageUrl,
+          title: food.name,
+          subtitle: food.subtitle,
+          price: food.formattedPrice,
+          ratingText: food.ratingText,
+          onTap: () => _openFoodDetail(food),
+        );
+      }).toList(),
+    );
+  }
+
+  void _openFoodDetail(HomeFoodItem food) {
+    if (food.id.isEmpty) return;
+
+    context.pushNamed(AppRouter.foodDetail, pathParameters: {'id': food.id});
+  }
+
+  String _errorMessage(Object? error) {
+    if (error is DioException && error.response?.statusCode == 401) {
+      return 'Session kamu belum valid. Silakan login ulang, lalu tarik layar untuk refresh.';
+    }
+
+    return 'Home data belum bisa dimuat. Cek koneksi atau backend, lalu coba lagi.';
+  }
+}
+
+class _HomeEmptyState extends StatelessWidget {
+  const _HomeEmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+      ),
+      child: Text(
+        message,
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeLoadingCard extends StatelessWidget {
+  const _HomeLoadingCard({required this.height, this.margin = EdgeInsets.zero});
+
+  final double height;
+  final EdgeInsetsGeometry margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      width: double.infinity,
+      margin: margin,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+          strokeWidth: 2.4,
+        ),
+      ),
+    );
   }
 }

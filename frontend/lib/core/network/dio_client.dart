@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/api_constants.dart';
 
-/// Dio HTTP Client configured with auth interceptor
-/// Automatically attaches Firebase ID Token to protected requests
+/// Dio HTTP client configured with a Firebase bearer token interceptor.
 class DioClient {
   late final Dio _dio;
   final FlutterSecureStorage _storage;
@@ -27,43 +27,85 @@ class DioClient {
       ),
     );
 
-    // Add auth interceptor
     _dio.interceptors.add(_authInterceptor());
 
-    // Add logging in debug mode
-    _dio.interceptors.add(
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        logPrint: (obj) => debugPrint('DIO: $obj'),
-      ),
-    );
+    if (kDebugMode) {
+      _dio.interceptors.add(
+        LogInterceptor(
+          requestBody: true,
+          responseBody: true,
+          logPrint: (obj) => debugPrint('DIO: $obj'),
+        ),
+      );
+    }
   }
 
   Dio get dio => _dio;
 
-  /// Auth Interceptor - Automatically attaches Firebase ID Token
   InterceptorsWrapper _authInterceptor() {
     return InterceptorsWrapper(
       onRequest: (options, handler) async {
-        // Read token from secure storage
-        final token = await _storage.read(key: 'firebase_id_token');
+        final token = await _readFirebaseToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
         handler.next(options);
       },
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
-          // Token expired - could refresh here
-          // For now, just pass the error along
+        final shouldRetry =
+            error.response?.statusCode == 401 &&
+            error.requestOptions.extra['retriedWithFreshToken'] != true;
+
+        if (shouldRetry) {
+          final token = await _refreshFirebaseToken();
+          if (token != null) {
+            final options = error.requestOptions;
+            options.extra['retriedWithFreshToken'] = true;
+            options.headers['Authorization'] = 'Bearer $token';
+
+            try {
+              final response = await _dio.fetch<dynamic>(options);
+              handler.resolve(response);
+              return;
+            } catch (_) {}
+          }
         }
+
         handler.next(error);
       },
     );
   }
 
-  // GET request
+  Future<String?> _readFirebaseToken() async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token != null && token.isNotEmpty) {
+        await _storage.write(
+          key: ApiConstants.firebaseIdTokenStorageKey,
+          value: token,
+        );
+        return token;
+      }
+    } catch (_) {}
+
+    return _storage.read(key: ApiConstants.firebaseIdTokenStorageKey);
+  }
+
+  Future<String?> _refreshFirebaseToken() async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken(true);
+      if (token != null && token.isNotEmpty) {
+        await _storage.write(
+          key: ApiConstants.firebaseIdTokenStorageKey,
+          value: token,
+        );
+        return token;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   Future<Response> get(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -71,7 +113,6 @@ class DioClient {
     return _dio.get(path, queryParameters: queryParameters);
   }
 
-  // POST request
   Future<Response> post(
     String path, {
     dynamic data,
@@ -80,7 +121,6 @@ class DioClient {
     return _dio.post(path, data: data, queryParameters: queryParameters);
   }
 
-  // PUT request
   Future<Response> put(
     String path, {
     dynamic data,
@@ -89,7 +129,14 @@ class DioClient {
     return _dio.put(path, data: data, queryParameters: queryParameters);
   }
 
-  // DELETE request
+  Future<Response> patch(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    return _dio.patch(path, data: data, queryParameters: queryParameters);
+  }
+
   Future<Response> delete(
     String path, {
     dynamic data,

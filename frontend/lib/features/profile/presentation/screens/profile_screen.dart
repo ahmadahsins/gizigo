@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/api_constants.dart';
+import '../../../../core/network/dio_client.dart';
+import '../../../../core/services/auto_refresh_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../router/app_router.dart';
+import '../../data/models/profile_history_item.dart';
+import '../../data/models/profile_user.dart';
+import '../../data/profile_remote_data_source.dart';
+import '../widgets/food_preference_content.dart';
 import '../../../home/presentation/widgets/custom_search_bar.dart';
 import '../../../home/presentation/widgets/recommendation_card.dart';
 
-enum _ProfileView { menu, account, history }
+enum _ProfileView { menu, account, foodPreference, history }
 
 /// Profile Screen - User profile & settings
 class ProfileScreen extends StatefulWidget {
@@ -21,7 +30,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with AutoRefreshStateMixin<ProfileScreen> {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   late final TextEditingController _fullNameController;
@@ -30,16 +40,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _ageController;
   late final TextEditingController _heightController;
   late final TextEditingController _weightController;
+  late final ProfileRemoteDataSource _profileRemoteDataSource;
 
   _ProfileView _view = _ProfileView.menu;
   bool _isEditingAccount = false;
+  bool _isLoadingProfile = true;
+  bool _isSavingProfile = false;
+  bool _isLoadingHistory = false;
 
-  String _savedFullName = 'GiziGang';
-  String _savedEmail = 'gizigang@gmail.com';
-  String _savedGender = 'Female';
-  String _savedAge = '19';
-  String _savedHeight = '160';
-  String _savedWeight = '50';
+  String _savedFullName = '';
+  String _savedEmail = '';
+  String _savedGender = '';
+  String _savedAge = '';
+  String _savedHeight = '';
+  String _savedWeight = '';
+  String? _profileError;
+  String? _historyError;
+  List<ProfileHistoryItem> _historyItems = const [];
 
   @override
   void initState() {
@@ -50,6 +67,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _ageController = TextEditingController(text: _savedAge);
     _heightController = TextEditingController(text: _savedHeight);
     _weightController = TextEditingController(text: _savedWeight);
+    _profileRemoteDataSource = ProfileRemoteDataSource(DioClient());
+    _loadProfile();
+  }
+
+  @override
+  bool get canAutoRefresh {
+    return (ModalRoute.of(context)?.isCurrent ?? true) &&
+        !_isEditingAccount &&
+        !_isSavingProfile;
+  }
+
+  @override
+  Future<void> onAutoRefresh() async {
+    await _loadProfile(showLoading: false);
+    if (_view == _ProfileView.history) {
+      await _loadHistory(showLoading: false);
+    }
   }
 
   @override
@@ -65,6 +99,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isFoodPreferenceView = _view == _ProfileView.foodPreference;
+
     return PopScope(
       canPop: _view == _ProfileView.menu,
       onPopInvokedWithResult: (didPop, result) {
@@ -88,35 +124,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   constraints: BoxConstraints(
                     minHeight: constraints.maxHeight - 61,
                   ),
-                  child: IntrinsicHeight(
-                    child: switch (_view) {
-                      _ProfileView.account => _AccountContent(
-                        isEditing: _isEditingAccount,
-                        fullNameController: _fullNameController,
-                        emailController: _emailController,
-                        genderController: _genderController,
-                        ageController: _ageController,
-                        heightController: _heightController,
-                        weightController: _weightController,
-                        onBack: _handleBack,
-                        onEdit: _enableAccountEditing,
-                        onEditPhoto: _handleEditPhoto,
-                        onSave: _saveAccountChanges,
-                        onDiscard: _discardAccountChanges,
-                        onGenderChanged: _setGender,
-                      ),
-                      _ProfileView.history => _HistoryContent(
-                        onBack: _handleBack,
-                      ),
-                      _ProfileView.menu => _ProfileMenuContent(
-                        displayName: _savedFullName,
-                        onBack: _handleBack,
-                        onAccountTap: _openAccount,
-                        onHistoryTap: _openHistory,
-                        onLogoutTap: _handleLogoutTap,
-                      ),
-                    },
-                  ),
+                  child: isFoodPreferenceView
+                      ? FoodPreferenceContent(onBack: _handleBack)
+                      : IntrinsicHeight(child: _buildCurrentProfileView()),
                 ),
               );
             },
@@ -124,6 +134,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildCurrentProfileView() {
+    return switch (_view) {
+      _ProfileView.account => _AccountContent(
+        isEditing: _isEditingAccount,
+        isLoading: _isLoadingProfile,
+        isSaving: _isSavingProfile,
+        errorMessage: _profileError,
+        fullNameController: _fullNameController,
+        emailController: _emailController,
+        genderController: _genderController,
+        ageController: _ageController,
+        heightController: _heightController,
+        weightController: _weightController,
+        onBack: _handleBack,
+        onEdit: _enableAccountEditing,
+        onEditPhoto: _handleEditPhoto,
+        onSave: _saveAccountChanges,
+        onDiscard: _discardAccountChanges,
+        onGenderChanged: _setGender,
+      ),
+      _ProfileView.history => _HistoryContent(
+        onBack: _handleBack,
+        isLoading: _isLoadingHistory,
+        errorMessage: _historyError,
+        items: _historyItems,
+        onRetry: _loadHistory,
+      ),
+      _ProfileView.menu => _ProfileMenuContent(
+        displayName: _displayName,
+        isLoading: _isLoadingProfile,
+        onBack: _handleBack,
+        onAccountTap: _openAccount,
+        onFoodPreferenceTap: _openFoodPreference,
+        onHistoryTap: _openHistory,
+        onLogoutTap: _handleLogoutTap,
+      ),
+      _ProfileView.foodPreference => const SizedBox.shrink(),
+    };
+  }
+
+  String get _displayName {
+    return _firstPresentName([
+      _savedFullName,
+      FirebaseAuth.instance.currentUser?.displayName,
+      _savedEmail,
+      FirebaseAuth.instance.currentUser?.email,
+      'User',
+    ]);
   }
 
   void _handleBack() {
@@ -134,6 +194,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (_view == _ProfileView.history) {
+      setState(() => _view = _ProfileView.menu);
+      return;
+    }
+
+    if (_view == _ProfileView.foodPreference) {
       setState(() => _view = _ProfileView.menu);
       return;
     }
@@ -150,8 +215,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _view = _ProfileView.account);
   }
 
+  void _openFoodPreference() {
+    setState(() => _view = _ProfileView.foodPreference);
+  }
+
   void _openHistory() {
     setState(() => _view = _ProfileView.history);
+    if (_historyItems.isEmpty && !_isLoadingHistory) {
+      _loadHistory();
+    }
   }
 
   void _enableAccountEditing() {
@@ -168,16 +240,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _genderController.text = gender);
   }
 
-  void _saveAccountChanges() {
-    setState(() {
-      _savedFullName = _fullNameController.text.trim();
-      _savedEmail = _emailController.text.trim();
-      _savedGender = _genderController.text.trim();
-      _savedAge = _ageController.text.trim();
-      _savedHeight = _heightController.text.trim();
-      _savedWeight = _weightController.text.trim();
-      _isEditingAccount = false;
-    });
+  Future<void> _saveAccountChanges() async {
+    if (_isSavingProfile) return;
+
+    setState(() => _isSavingProfile = true);
+
+    try {
+      final profile = await _profileRemoteDataSource.updateProfile(
+        name: _fullNameController.text.trim(),
+        gender: _genderController.text.trim(),
+        age: int.tryParse(_ageController.text.trim()),
+        heightCm: int.tryParse(_heightController.text.trim()),
+        weightKg: int.tryParse(_weightController.text.trim()),
+      );
+
+      if (!mounted) return;
+
+      _applyProfile(profile);
+      setState(() {
+        _isEditingAccount = false;
+        _isSavingProfile = false;
+        _profileError = null;
+      });
+      AutoRefreshService.instance.refreshNow();
+      _showSnackBar('Profile updated.');
+    } catch (error) {
+      if (!mounted) return;
+
+      final message = _profileSaveErrorMessage(error);
+      setState(() {
+        _isSavingProfile = false;
+        _profileError = message;
+      });
+      _showSnackBar(message);
+    }
   }
 
   void _discardAccountChanges() {
@@ -202,25 +298,201 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (!mounted || confirmed != true) return;
 
-    await _secureStorage.delete(key: 'firebase_id_token');
+    await _secureStorage.delete(key: ApiConstants.firebaseIdTokenStorageKey);
 
     if (!mounted) return;
     context.goNamed(AppRouter.login);
+  }
+
+  Future<void> _loadProfile({bool showLoading = true}) async {
+    if (_isEditingAccount || _isSavingProfile) return;
+
+    if (showLoading) {
+      setState(() {
+        _isLoadingProfile = true;
+        _profileError = null;
+      });
+    }
+
+    try {
+      var profile = await _loadSyncedProfile();
+      if (!mounted) return;
+
+      _applyProfile(profile);
+      setState(() {
+        if (showLoading) _isLoadingProfile = false;
+        _profileError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      if (showLoading) {
+        _applyFirebaseFallback();
+        setState(() {
+          _isLoadingProfile = false;
+          _profileError = 'Profile belum bisa dimuat dari database.';
+        });
+      }
+    }
+  }
+
+  Future<void> _loadHistory({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoadingHistory = true;
+        _historyError = null;
+      });
+    }
+
+    try {
+      final items = await _profileRemoteDataSource.getRecentlyViewed();
+      if (!mounted) return;
+
+      setState(() {
+        _historyItems = items;
+        if (showLoading) _isLoadingHistory = false;
+        _historyError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      if (showLoading || _historyItems.isEmpty) {
+        setState(() {
+          _historyError = 'History belum bisa dimuat dari database.';
+          _isLoadingHistory = false;
+        });
+      }
+    }
+  }
+
+  void _applyProfile(ProfileUser profile) {
+    _savedFullName = _firstPresentName([
+      profile.name,
+      profile.username,
+      FirebaseAuth.instance.currentUser?.displayName,
+      profile.email,
+      FirebaseAuth.instance.currentUser?.email,
+    ]);
+    _savedEmail = _firstPresentText([
+      profile.email,
+      FirebaseAuth.instance.currentUser?.email,
+    ]);
+    _savedGender = profile.gender;
+    _savedAge = profile.age?.toString() ?? '';
+    _savedHeight = profile.heightCm?.toString() ?? '';
+    _savedWeight = profile.weightKg?.toString() ?? '';
+    _discardAccountChanges();
+  }
+
+  void _applyFirebaseFallback() {
+    final user = FirebaseAuth.instance.currentUser;
+    _savedFullName = _firstPresentName([
+      user?.displayName,
+      user?.email,
+      'User',
+    ]);
+    _savedEmail = user?.email?.trim() ?? '';
+    _discardAccountChanges();
+  }
+
+  Future<ProfileUser> _loadSyncedProfile() async {
+    try {
+      return await _profileRemoteDataSource.getProfile();
+    } catch (_) {
+      await _profileRemoteDataSource.syncUser();
+      return _profileRemoteDataSource.getProfile();
+    }
+  }
+
+  String _firstPresentName(List<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty || text.toLowerCase() == 'unknown') continue;
+
+      if (text.contains('@')) {
+        final emailName = text.split('@').first.trim();
+        if (emailName.isNotEmpty) return emailName;
+        continue;
+      }
+
+      return text;
+    }
+
+    return 'User';
+  }
+
+  String _firstPresentText(List<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty && text.toLowerCase() != 'unknown') return text;
+    }
+
+    return '';
+  }
+
+  String _profileSaveErrorMessage(Object error) {
+    if (error is DioException) {
+      final statusCode = error.response?.statusCode;
+      final data = error.response?.data;
+      final backendMessage = _backendErrorMessage(data);
+      if (backendMessage != null) return backendMessage;
+
+      if (statusCode == 401) {
+        return 'Sesi login tidak valid. Silakan logout lalu login lagi.';
+      }
+      if (statusCode == 404) {
+        return 'Data user belum tersinkron. Coba login ulang.';
+      }
+      if (statusCode != null) {
+        return 'Gagal menyimpan profile. Server memberi status $statusCode.';
+      }
+      if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.connectionError) {
+        return 'Tidak bisa terhubung ke backend. Cek Wi-Fi/IP backend.';
+      }
+    }
+
+    return 'Gagal menyimpan profile. Cek koneksi lalu coba lagi.';
+  }
+
+  String? _backendErrorMessage(Object? data) {
+    if (data is Map) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) return message;
+      if (message is List && message.isNotEmpty) {
+        return message.map((item) => item.toString()).join('\n');
+      }
+      final error = data['error'];
+      if (error is String && error.trim().isNotEmpty) return error;
+    }
+
+    return null;
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
 class _ProfileMenuContent extends StatelessWidget {
   const _ProfileMenuContent({
     required this.displayName,
+    required this.isLoading,
     required this.onBack,
     required this.onAccountTap,
+    required this.onFoodPreferenceTap,
     required this.onHistoryTap,
     required this.onLogoutTap,
   });
 
   final String displayName;
+  final bool isLoading;
   final VoidCallback onBack;
   final VoidCallback onAccountTap;
+  final VoidCallback onFoodPreferenceTap;
   final VoidCallback onHistoryTap;
   final VoidCallback onLogoutTap;
 
@@ -234,15 +506,26 @@ class _ProfileMenuContent extends StatelessWidget {
         const Center(child: _ProfileAvatar()),
         const SizedBox(height: 17),
         Center(
-          child: Text(
-            displayName,
-            style: AppTextStyles.heading1.copyWith(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              height: 1,
-              color: const Color(0xFF242424),
-            ),
-          ),
+          child: isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.primary,
+                  ),
+                )
+              : Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.heading1.copyWith(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                    color: const Color(0xFF242424),
+                  ),
+                ),
         ),
         const SizedBox(height: 48),
         const _SectionTitle('Settings'),
@@ -256,7 +539,7 @@ class _ProfileMenuContent extends StatelessWidget {
         _ProfileMenuTile(
           icon: Icons.restaurant_outlined,
           label: 'Food Preference',
-          onTap: () {},
+          onTap: onFoodPreferenceTap,
         ),
         const SizedBox(height: 7),
         _ProfileMenuTile(
@@ -396,15 +679,24 @@ class _LogoutConfirmationDialog extends StatelessWidget {
 }
 
 class _HistoryContent extends StatelessWidget {
-  const _HistoryContent({required this.onBack});
-
-  static const String _foodImageUrl =
-      'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=240&q=80';
+  const _HistoryContent({
+    required this.onBack,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.items,
+    required this.onRetry,
+  });
 
   final VoidCallback onBack;
+  final bool isLoading;
+  final String? errorMessage;
+  final List<ProfileHistoryItem> items;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final sections = _groupItems(items);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -426,74 +718,72 @@ class _HistoryContent extends StatelessWidget {
         const SizedBox(height: 21),
         const CustomSearchBar(),
         const SizedBox(height: 24),
-        const _HistorySection(
-          title: 'Today',
-          items: [
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp16.000',
-              ratingText: 'Excellent',
-              imageUrl: _foodImageUrl,
+        if (isLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: CircularProgressIndicator(color: AppColors.primary),
             ),
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp14.000',
-              ratingText: 'Very good',
-              imageUrl: _foodImageUrl,
+          )
+        else if (errorMessage != null)
+          _ProfileStatusBox(message: errorMessage!, onRetry: onRetry)
+        else if (items.isEmpty)
+          const _ProfileStatusBox(message: 'No recently viewed foods yet.')
+        else
+          ...sections.entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _HistorySection(title: entry.key, items: entry.value),
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        const _HistorySection(
-          title: 'Yesterday',
-          items: [
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp15.500',
-              ratingText: 'Excellent',
-              imageUrl: _foodImageUrl,
-            ),
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp16.000',
-              ratingText: 'Good',
-              imageUrl: _foodImageUrl,
-            ),
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp14.000',
-              ratingText: 'Very good',
-              imageUrl: _foodImageUrl,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        const _HistorySection(
-          title: '9 May 2026',
-          items: [
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp15.500',
-              ratingText: 'Excellent',
-              imageUrl: _foodImageUrl,
-            ),
-            _HistoryFoodItem(
-              title: 'Lorem ipsum',
-              subtitle: 'Lorem ipsum',
-              price: 'Rp14.000',
-              ratingText: 'Good',
-              imageUrl: _foodImageUrl,
-            ),
-          ],
-        ),
+          ),
       ],
     );
+  }
+
+  Map<String, List<ProfileHistoryItem>> _groupItems(
+    List<ProfileHistoryItem> items,
+  ) {
+    final sections = <String, List<ProfileHistoryItem>>{};
+    for (final item in items) {
+      final key = _dateLabel(item.viewedAt);
+      sections.putIfAbsent(key, () => []).add(item);
+    }
+
+    return sections;
+  }
+
+  String _dateLabel(DateTime? viewedAt) {
+    if (viewedAt == null) return 'Recently';
+
+    final localDate = viewedAt.toLocal();
+    final today = DateTime.now();
+    final currentDay = DateTime(today.year, today.month, today.day);
+    final viewedDay = DateTime(localDate.year, localDate.month, localDate.day);
+    final difference = currentDay.difference(viewedDay).inDays;
+
+    if (difference == 0) return 'Today';
+    if (difference == 1) return 'Yesterday';
+
+    return '${localDate.day} ${_monthName(localDate.month)} ${localDate.year}';
+  }
+
+  String _monthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return months[month - 1];
   }
 }
 
@@ -501,7 +791,7 @@ class _HistorySection extends StatelessWidget {
   const _HistorySection({required this.title, required this.items});
 
   final String title;
-  final List<_HistoryFoodItem> items;
+  final List<ProfileHistoryItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -521,9 +811,9 @@ class _HistorySection extends StatelessWidget {
         ...items.map(
           (item) => RecommendationCard(
             imageUrl: item.imageUrl,
-            title: item.title,
-            subtitle: item.subtitle,
-            price: item.price,
+            title: item.name,
+            subtitle: item.description,
+            price: item.formattedPrice,
             ratingText: item.ratingText,
           ),
         ),
@@ -532,25 +822,12 @@ class _HistorySection extends StatelessWidget {
   }
 }
 
-class _HistoryFoodItem {
-  const _HistoryFoodItem({
-    required this.title,
-    required this.subtitle,
-    required this.price,
-    required this.ratingText,
-    required this.imageUrl,
-  });
-
-  final String title;
-  final String subtitle;
-  final String price;
-  final String ratingText;
-  final String imageUrl;
-}
-
 class _AccountContent extends StatelessWidget {
   const _AccountContent({
     required this.isEditing,
+    required this.isLoading,
+    required this.isSaving,
+    required this.errorMessage,
     required this.fullNameController,
     required this.emailController,
     required this.genderController,
@@ -566,6 +843,9 @@ class _AccountContent extends StatelessWidget {
   });
 
   final bool isEditing;
+  final bool isLoading;
+  final bool isSaving;
+  final String? errorMessage;
   final TextEditingController fullNameController;
   final TextEditingController emailController;
   final TextEditingController genderController;
@@ -594,6 +874,17 @@ class _AccountContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 63),
+        if (isLoading) ...[
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: 24),
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          ),
+        ] else if (errorMessage != null) ...[
+          _ProfileStatusBox(message: errorMessage!),
+          const SizedBox(height: 22),
+        ],
         _AccountField(
           label: 'Full Name',
           controller: fullNameController,
@@ -603,7 +894,7 @@ class _AccountContent extends StatelessWidget {
         _AccountField(
           label: 'Email',
           controller: emailController,
-          enabled: isEditing,
+          enabled: false,
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 22),
@@ -654,15 +945,59 @@ class _AccountContent extends StatelessWidget {
         const Spacer(),
         const SizedBox(height: 36),
         if (isEditing) ...[
-          _PrimaryProfileButton(text: 'Save Changes', onPressed: onSave),
+          _PrimaryProfileButton(
+            text: isSaving ? 'Saving...' : 'Save Changes',
+            onPressed: isSaving ? null : onSave,
+          ),
           const SizedBox(height: 18),
           _SecondaryProfileButton(
             text: 'Discard Changes',
-            onPressed: onDiscard,
+            onPressed: isSaving ? null : onDiscard,
           ),
         ] else
-          _PrimaryProfileButton(text: 'Edit', onPressed: onEdit),
+          _PrimaryProfileButton(
+            text: 'Edit',
+            onPressed: isLoading ? null : onEdit,
+          ),
       ],
+    );
+  }
+}
+
+class _ProfileStatusBox extends StatelessWidget {
+  const _ProfileStatusBox({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F4F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5DEDE)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+              child: const Text('Retry'),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -928,7 +1263,7 @@ class _PrimaryProfileButton extends StatelessWidget {
   const _PrimaryProfileButton({required this.text, required this.onPressed});
 
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -963,7 +1298,7 @@ class _SecondaryProfileButton extends StatelessWidget {
   const _SecondaryProfileButton({required this.text, required this.onPressed});
 
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

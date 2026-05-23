@@ -42,10 +42,7 @@ class CategoryItemCard extends StatelessWidget {
               child: imageUrl.startsWith('assets/')
                   ? Container(
                       padding: const EdgeInsets.all(4),
-                      child: SvgPicture.asset(
-                        imageUrl,
-                        fit: BoxFit.contain,
-                      ),
+                      child: SvgPicture.asset(imageUrl, fit: BoxFit.contain),
                     )
                   : Image.network(
                       imageUrl,
@@ -77,6 +74,9 @@ class CategoryItemCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,

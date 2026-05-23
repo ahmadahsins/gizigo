@@ -6,11 +6,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../../core/network/dio_client.dart';
+import '../../../../core/services/auto_refresh_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../router/app_router.dart';
-import '../../data/location_mock_data.dart';
+import '../../data/location_remote_data_source.dart';
 import '../../data/location_reverse_geocoding_service.dart';
+import '../../data/location_storage_service.dart';
 import '../../domain/entities/location_item.dart';
 import '../widgets/location_action_chip.dart';
 import '../widgets/location_recent_tile.dart';
@@ -26,24 +29,30 @@ class SelectLocationScreen extends StatefulWidget {
   State<SelectLocationScreen> createState() => _SelectLocationScreenState();
 }
 
-class _SelectLocationScreenState extends State<SelectLocationScreen> {
+class _SelectLocationScreenState extends State<SelectLocationScreen>
+    with AutoRefreshStateMixin<SelectLocationScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final LocationReverseGeocodingService _geocodingService =
       LocationReverseGeocodingService();
+  final LocationStorageService _locationStorage =
+      const LocationStorageService();
+  late final LocationRemoteDataSource _locationRemoteDataSource;
 
   String _query = '';
+  List<LocationItem> _recentLocations = const [];
   List<LocationItem> _searchResults = const [];
   Timer? _searchDebounce;
   CancelToken? _searchCancelToken;
   int _searchRequestId = 0;
   bool _isSearching = false;
   bool _isUsingCurrentLocation = false;
+  bool _isLoadingRecentLocations = true;
   String? _searchMessage;
 
   List<LocationItem> get _visibleLocations {
     final normalizedQuery = _query.trim().toLowerCase();
-    if (normalizedQuery.isEmpty) return recentLocations;
+    if (normalizedQuery.isEmpty) return _recentLocations;
 
     return _searchResults;
   }
@@ -53,7 +62,7 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
   String get _sectionTitle => _hasQuery ? 'Search results' : 'Recent';
 
   String get _emptyMessage {
-    if (_isSearching) return 'Mencari lokasi...';
+    if (_isSearching || _isLoadingRecentLocations) return 'Mencari lokasi...';
     if (_searchMessage != null) return _searchMessage!;
     return _hasQuery ? 'Lokasi tidak ditemukan' : 'No recent locations';
   }
@@ -61,9 +70,23 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
   @override
   void initState() {
     super.initState();
+    _locationRemoteDataSource = LocationRemoteDataSource(DioClient());
+    _loadRecentLocations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureLocationServiceEnabled();
     });
+  }
+
+  @override
+  bool get canAutoRefresh {
+    return (ModalRoute.of(context)?.isCurrent ?? true) &&
+        !_hasQuery &&
+        !_isUsingCurrentLocation;
+  }
+
+  @override
+  Future<void> onAutoRefresh() {
+    return _loadRecentLocations(showLoading: false);
   }
 
   @override
@@ -157,11 +180,15 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                     padding: EdgeInsets.symmetric(
                       horizontal: horizontalPadding,
                     ),
-                    sliver: _visibleLocations.isEmpty || _isSearching
+                    sliver:
+                        _visibleLocations.isEmpty ||
+                            _isSearching ||
+                            _isLoadingRecentLocations
                         ? SliverToBoxAdapter(
                             child: _EmptyLocations(
                               message: _emptyMessage,
-                              isLoading: _isSearching,
+                              isLoading:
+                                  _isSearching || _isLoadingRecentLocations,
                             ),
                           )
                         : SliverList.separated(
@@ -267,8 +294,11 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
     _openMapSelection();
   }
 
-  void _selectLocation(LocationItem location) {
+  Future<void> _selectLocation(LocationItem location) async {
     _unfocusSearch();
+
+    await _saveSelectedLocation(location);
+    if (!mounted) return;
 
     if (context.canPop()) {
       context.pop(location);
@@ -280,6 +310,40 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
 
   void _unfocusSearch() {
     FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _loadRecentLocations({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoadingRecentLocations = true);
+    }
+
+    try {
+      final locations = await _locationRemoteDataSource.getRecentLocations();
+      if (!mounted) return;
+
+      setState(() {
+        _recentLocations = locations;
+        _isLoadingRecentLocations = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      if (showLoading || _recentLocations.isEmpty) {
+        setState(() {
+          _recentLocations = const [];
+          _isLoadingRecentLocations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveSelectedLocation(LocationItem location) async {
+    await _locationStorage.saveSelectedLocation(location);
+
+    try {
+      await _locationRemoteDataSource.saveRecentLocation(location);
+      AutoRefreshService.instance.refreshNow();
+    } catch (_) {}
   }
 
   Future<void> _searchLocations(String query) async {
