@@ -4,7 +4,8 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RecommendationsQueryDto {
   @ApiPropertyOptional({
-    description: 'User latitude — adds distance_in_km & boosts nearby items slightly',
+    description:
+      'User latitude — adds distance_in_km & boosts nearby items slightly',
   })
   @IsOptional()
   @Type(() => Number)
@@ -21,7 +22,8 @@ export class RecommendationsQueryDto {
 
   @ApiPropertyOptional({
     default: 1,
-    description: 'Hero strip “You Might Like This” — top picks after personalization',
+    description:
+      'Hero strip “You Might Like This” — top picks after personalization',
   })
   @IsOptional()
   @Type(() => Number)
@@ -32,7 +34,8 @@ export class RecommendationsQueryDto {
 
   @ApiPropertyOptional({
     default: 15,
-    description: 'List length for “Recommendations for You” (excluding featured)',
+    description:
+      'List length for “Recommendations for You” (excluding featured)',
   })
   @IsOptional()
   @Type(() => Number)

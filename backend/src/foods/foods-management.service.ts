@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from '../firebase/firebase.service';
@@ -10,6 +11,10 @@ import { UserRole } from '../common/enums/user-role.enum';
 import { CreateFoodDto } from '../admin/dto/create-food.dto';
 import { UpdateFoodDto } from '../admin/dto/update-food.dto';
 import { CreateMerchantFoodDto } from '../merchant/dto/create-merchant-food.dto';
+import { UpdateMerchantFoodDto } from '../merchant/dto/update-merchant-food.dto';
+import { AiService, NutritionAssessment } from '../ai/ai.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 
 export interface FoodActorContext {
   role: UserRole;
@@ -18,7 +23,11 @@ export interface FoodActorContext {
 
 @Injectable()
 export class FoodsManagementService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly aiService: AiService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   private db() {
     return this.firebaseService.getFirestore();
@@ -30,7 +39,8 @@ export class FoodsManagementService {
     merchantIdOverride?: string,
   ) {
     const merchantId = this.resolveMerchantId(actor, dto, merchantIdOverride);
-    const foodData = this.buildFoodPayload(dto, merchantId, actor);
+    const assessment = await this.analyzeAcceptedRecipe(dto.recipe);
+    const foodData = this.buildFoodPayload(dto, merchantId, actor, assessment);
 
     try {
       const db = this.db();
@@ -40,13 +50,23 @@ export class FoodsManagementService {
         ...foodData,
         created_at: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return { message: 'Food created successfully', id: foodRef.id };
+      return {
+        message: 'Food created successfully',
+        id: foodRef.id,
+        nutrition_grade: assessment.grade,
+        nutritional_info: assessment.nutritional_info,
+        nutrition_assessment_reason: assessment.reason,
+      };
     } catch {
       throw new InternalServerErrorException('Failed to create food');
     }
   }
 
-  async updateFood(id: string, dto: UpdateFoodDto, actor: FoodActorContext) {
+  async updateFood(
+    id: string,
+    dto: UpdateFoodDto | UpdateMerchantFoodDto,
+    actor: FoodActorContext,
+  ) {
     const foodRef = this.db().collection('foods').doc(id);
     const doc = await foodRef.get();
 
@@ -56,16 +76,62 @@ export class FoodsManagementService {
 
     this.assertFoodOwnership(doc.data()!, actor);
 
-    const patch = this.buildUpdatePatch(dto, actor);
+    const assessment = dto.recipe
+      ? await this.analyzeAcceptedRecipe(dto.recipe)
+      : undefined;
+    const patch = this.buildUpdatePatch(dto, actor, assessment);
 
     try {
       await foodRef.update({
         ...patch,
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return { message: 'Food updated successfully' };
+      return {
+        message: 'Food updated successfully',
+        ...(assessment
+          ? {
+              nutrition_grade: assessment.grade,
+              nutritional_info: assessment.nutritional_info,
+              nutrition_assessment_reason: assessment.reason,
+            }
+          : {}),
+      };
     } catch {
       throw new InternalServerErrorException('Failed to update food');
+    }
+  }
+
+  async uploadFoodPhoto(
+    id: string,
+    file: UploadedImageFile,
+    actor: FoodActorContext,
+  ) {
+    const foodRef = this.db().collection('foods').doc(id);
+    const doc = await foodRef.get();
+
+    if (!doc.exists) {
+      throw new NotFoundException('Food not found');
+    }
+
+    this.assertFoodOwnership(doc.data()!, actor);
+
+    const photoUrl = await this.cloudinaryService.uploadFoodPhoto(
+      id,
+      file.buffer,
+    );
+
+    try {
+      await foodRef.update({
+        photo_url: photoUrl,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {
+        message: 'Food photo uploaded successfully',
+        food_id: id,
+        photo_url: photoUrl,
+      };
+    } catch {
+      throw new InternalServerErrorException('Failed to update food photo');
     }
   }
 
@@ -102,10 +168,13 @@ export class FoodsManagementService {
       .get();
 
     let items: Array<{ id: string } & Record<string, unknown>> = snap.docs.map(
-      (doc) => ({
-        id: doc.id,
-        ...(doc.data() as Record<string, unknown>),
-      }),
+      (doc) => {
+        const food = {
+          ...(doc.data() as unknown as Record<string, unknown>),
+        };
+        delete food['recipe'];
+        return { id: doc.id, ...food };
+      },
     );
 
     if (!includeUnavailable) {
@@ -141,9 +210,12 @@ export class FoodsManagementService {
 
     if (actor.role === UserRole.ADMIN) {
       const merchantId =
-        merchantIdOverride ?? ('merchant_id' in dto ? dto.merchant_id : undefined);
+        merchantIdOverride ??
+        ('merchant_id' in dto ? dto.merchant_id : undefined);
       if (!merchantId) {
-        throw new ForbiddenException('merchant_id is required for admin food create');
+        throw new ForbiddenException(
+          'merchant_id is required for admin food create',
+        );
       }
       return merchantId;
     }
@@ -155,18 +227,20 @@ export class FoodsManagementService {
     dto: CreateFoodDto | CreateMerchantFoodDto,
     merchantId: string,
     actor: FoodActorContext,
+    assessment: NutritionAssessment,
   ) {
     const payload: Record<string, unknown> = {
       name: dto.name,
       description: dto.description,
-      photo_url: dto.photo_url,
-      nutrition_grade: dto.nutrition_grade,
+      nutrition_grade: assessment.grade,
       food_category: dto.food_category,
       health_labels: dto.health_labels,
       base_price: dto.base_price,
       merchant_id: merchantId,
       is_available: dto.is_available,
-      nutritional_info: dto.nutritional_info ?? null,
+      nutritional_info: assessment.nutritional_info,
+      nutrition_assessment_reason: assessment.reason,
+      nutrition_analyzed_at: admin.firestore.FieldValue.serverTimestamp(),
       comparison_data: dto.comparison_data ?? null,
     };
 
@@ -183,11 +257,16 @@ export class FoodsManagementService {
     return payload;
   }
 
-  private buildUpdatePatch(dto: UpdateFoodDto, actor: FoodActorContext) {
+  private buildUpdatePatch(
+    dto: UpdateFoodDto | UpdateMerchantFoodDto,
+    actor: FoodActorContext,
+    assessment?: NutritionAssessment,
+  ) {
     const patch: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(dto)) {
       if (value === undefined) continue;
+      if (key === 'recipe') continue;
       if (actor.role === UserRole.MERCHANT && this.isAdminOnlyFoodField(key)) {
         continue;
       }
@@ -198,7 +277,28 @@ export class FoodsManagementService {
       delete patch.merchant_id;
     }
 
+    if (assessment) {
+      patch.nutrition_grade = assessment.grade;
+      patch.nutritional_info = assessment.nutritional_info;
+      patch.nutrition_assessment_reason = assessment.reason;
+      patch.nutrition_analyzed_at =
+        admin.firestore.FieldValue.serverTimestamp();
+    }
+
     return patch;
+  }
+
+  private async analyzeAcceptedRecipe(recipe: CreateFoodDto['recipe']) {
+    const assessment = await this.aiService.analyzeRecipe(recipe);
+    if (!assessment.accepted || assessment.grade === 'BELOW_GOOD') {
+      throw new UnprocessableEntityException({
+        message: 'Food rejected because its nutrition grade is below GOOD',
+        nutrition_grade: assessment.grade,
+        nutritional_info: assessment.nutritional_info,
+        nutrition_assessment_reason: assessment.reason,
+      });
+    }
+    return assessment;
   }
 
   private isAdminOnlyFoodField(key: string): boolean {

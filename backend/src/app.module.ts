@@ -10,6 +10,7 @@ import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 import { MetaModule } from './meta/meta.module';
 import { MerchantModule } from './merchant/merchant.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MerchantModule } from './merchant/merchant.module';
     MerchantModule,
     UsersModule,
     MetaModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

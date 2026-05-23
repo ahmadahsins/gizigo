@@ -23,7 +23,10 @@ export class GetFoodsQueryDto {
   @IsString()
   q?: string;
 
-  @ApiPropertyOptional({ enum: NutritionGrade, description: 'Health tier badge' })
+  @ApiPropertyOptional({
+    enum: NutritionGrade,
+    description: 'Health tier badge',
+  })
   @IsOptional()
   @IsEnum(NutritionGrade)
   nutrition_grade?: NutritionGrade;
@@ -60,7 +63,8 @@ export class GetFoodsQueryDto {
   lat?: number;
 
   @ApiPropertyOptional({
-    description: 'User longitude (required for distance sort / max_distance_km)',
+    description:
+      'User longitude (required for distance sort / max_distance_km)',
   })
   @IsOptional()
   @Type(() => Number)

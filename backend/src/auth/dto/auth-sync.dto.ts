@@ -1,11 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-  IsIn,
-  IsOptional,
-  ValidateIf,
-  ValidateNested,
-} from 'class-validator';
+import { IsIn, IsOptional, ValidateIf, ValidateNested } from 'class-validator';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { MerchantLocationDto } from '../../merchants/dto/merchant-location.dto';
 

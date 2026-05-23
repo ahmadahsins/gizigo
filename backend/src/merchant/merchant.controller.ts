@@ -3,25 +3,33 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
   Param,
   Patch,
+  ParseFilePipeBuilder,
   Post,
   Put,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
+import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 import { MerchantsService } from '../merchants/merchants.service';
 import { FoodsManagementService } from '../foods/foods-management.service';
 import { UpdateMerchantProfileDto } from '../merchants/dto/update-merchant-profile.dto';
@@ -75,7 +83,11 @@ export class MerchantController {
   }
 
   @Post('foods')
-  @ApiOperation({ summary: 'Create a food for the logged-in merchant' })
+  @ApiOperation({
+    summary: 'Create a food for the logged-in merchant',
+    description:
+      'Requires request-only `recipe`; generated nutrition is saved only when its grade is at least GOOD. The recipe is never saved.',
+  })
   @ApiBody({
     type: CreateMerchantFoodDto,
     examples: { default: { value: MERCHANT_CREATE_FOOD_BODY_EXAMPLE } },
@@ -84,14 +96,18 @@ export class MerchantController {
     @Req() req: { merchantId: string; userRole: UserRole },
     @Body() dto: CreateMerchantFoodDto,
   ) {
-    return this.foodsManagementService.createFood(
-      dto,
-      { role: req.userRole, merchantId: req.merchantId },
-    );
+    return this.foodsManagementService.createFood(dto, {
+      role: req.userRole,
+      merchantId: req.merchantId,
+    });
   }
 
   @Put('foods/:id')
-  @ApiOperation({ summary: 'Update a food owned by the logged-in merchant' })
+  @ApiOperation({
+    summary: 'Update a food owned by the logged-in merchant',
+    description:
+      'Send `recipe` only to refresh generated nutrition. Recipe ingredients are not persisted.',
+  })
   async updateFood(
     @Req() req: { merchantId: string; userRole: UserRole },
     @Param('id') id: string,
@@ -103,8 +119,57 @@ export class MerchantController {
     });
   }
 
+  @Post('foods/:id/photo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload or replace a photo for a food owned by this merchant',
+    description:
+      'Accepts one JPEG, PNG, or WebP image (max 5 MB), uploads it to Cloudinary, and persists `photo_url`.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOkResponse({
+    schema: {
+      example: {
+        message: 'Food photo uploaded successfully',
+        food_id: 'foodDocId1',
+        photo_url:
+          'https://res.cloudinary.com/demo/image/upload/gizigo/foods/foodDocId1.jpg',
+      },
+    },
+  })
+  async uploadFoodPhoto(
+    @Req() req: { merchantId: string; userRole: UserRole },
+    @Param('id') id: string,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/ })
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
+        .build({ errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY }),
+    )
+    file: UploadedImageFile,
+  ) {
+    return this.foodsManagementService.uploadFoodPhoto(id, file, {
+      role: req.userRole,
+      merchantId: req.merchantId,
+    });
+  }
+
   @Delete('foods/:id')
-  @ApiOperation({ summary: 'Soft-delete a food owned by the logged-in merchant' })
+  @ApiOperation({
+    summary: 'Soft-delete a food owned by the logged-in merchant',
+  })
   async deleteFood(
     @Req() req: { merchantId: string; userRole: UserRole },
     @Param('id') id: string,

@@ -10,8 +10,11 @@ let expressApp: express.Express | undefined;
 async function bootstrap(): Promise<express.Express> {
   if (!expressApp) {
     expressApp = express();
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
-    await configureApp(app);
+    const app = await NestFactory.create(
+      AppModule,
+      new ExpressAdapter(expressApp),
+    );
+    configureApp(app);
     await app.init();
   }
   return expressApp;

@@ -2,20 +2,28 @@ import {
   Body,
   Controller,
   Get,
+  HttpStatus,
   Patch,
+  ParseFilePipeBuilder,
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
+import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 import { UsersService } from './users.service';
 import { RecordRecentlyViewedDto } from './dto/record-recently-viewed.dto';
 import { RecordRecentLocationDto } from './dto/record-recent-location.dto';
@@ -69,8 +77,49 @@ export class UsersController {
     return this.usersService.updateProfile(req.user.uid, dto);
   }
 
+  @Post('me/photo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload or replace current user profile photo',
+    description:
+      'Accepts one JPEG, PNG, or WebP image (max 5 MB), uploads it to Cloudinary, and persists `profile_photo_url`.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Updated profile containing profile_photo_url',
+    schema: { example: USER_PROFILE_EXAMPLE },
+  })
+  async uploadProfilePhoto(
+    @Req() req: { user: { uid: string } },
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/ })
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
+        .build({ errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY }),
+    )
+    file: UploadedImageFile,
+  ) {
+    return this.usersService.uploadProfilePhoto(req.user.uid, file);
+  }
+
   @Post('me/recently-viewed')
-  @ApiOperation({ summary: 'Upsert a food into Recently viewed (call from detail screen)' })
+  @ApiOperation({
+    summary: 'Upsert a food into Recently viewed (call from detail screen)',
+  })
   async postRecentlyViewed(
     @Req() req: { user: { uid: string } },
     @Body() dto: RecordRecentlyViewedDto,
@@ -79,7 +128,9 @@ export class UsersController {
   }
 
   @Get('me/recently-viewed')
-  @ApiOperation({ summary: 'Paginated recently viewed foods with optional search' })
+  @ApiOperation({
+    summary: 'Paginated recently viewed foods with optional search',
+  })
   @ApiOkResponse({
     schema: { example: RECENTLY_VIEWED_RESPONSE_EXAMPLE },
   })

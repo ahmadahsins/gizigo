@@ -29,7 +29,11 @@ export class UpdateUserProfileDto {
   @IsEnum(Gender)
   gender?: Gender;
 
-  @ApiPropertyOptional({ description: 'Age in full years', minimum: 13, maximum: 120 })
+  @ApiPropertyOptional({
+    description: 'Age in full years',
+    minimum: 13,
+    maximum: 120,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -37,7 +41,11 @@ export class UpdateUserProfileDto {
   @Max(120)
   age?: number;
 
-  @ApiPropertyOptional({ description: 'Weight kilograms', minimum: 20, maximum: 400 })
+  @ApiPropertyOptional({
+    description: 'Weight kilograms',
+    minimum: 20,
+    maximum: 400,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -45,7 +53,11 @@ export class UpdateUserProfileDto {
   @Max(400)
   weight_kg?: number;
 
-  @ApiPropertyOptional({ description: 'Height centimeters', minimum: 50, maximum: 260 })
+  @ApiPropertyOptional({
+    description: 'Height centimeters',
+    minimum: 50,
+    maximum: 260,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -70,6 +82,26 @@ export class UpdateUserProfileDto {
   @IsArray()
   @IsString({ each: true })
   food_preferences?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['Vegetarian', 'Peanut allergy'],
+    description: 'Dietary constraints used for AI food ranking',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dietary_restrictions?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['Spicy', 'Savory'],
+    description: 'Taste preferences used for AI food ranking',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  taste_profile?: string[];
 
   @ApiPropertyOptional({
     description: 'True after onboarding wizard completed',
