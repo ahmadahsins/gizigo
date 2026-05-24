@@ -146,7 +146,8 @@ Untuk Swagger UI di Vercel, file static dari `swagger-ui-dist` harus ikut
 dibundel dalam function. Konfigurasi `vercel.json` mempertahankan aset tersebut
 melalui `includeFiles: "api/dist/node_modules/swagger-ui-dist/**"`. Bila
 `/api` menghasilkan HTML tetapi CSS atau JavaScript Swagger berstatus `404`,
-redeploy setelah memastikan konfigurasi ini tidak dihapus.
+Swagger juga memuat fallback asset dari jsDelivr yang diizinkan secara terbatas
+pada CSP Helmet. Redeploy setelah memastikan konfigurasi ini tidak dihapus.
 
 | Gejala                             | Penyebab & Solusi                                                                                                                                                        |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

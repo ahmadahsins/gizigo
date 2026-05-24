@@ -3,8 +3,18 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 
+const SWAGGER_UI_CDN = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.4';
+
 export function configureApp(app: INestApplication): void {
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+        },
+      },
+    }),
+  );
   app.enableCors();
 
   app.useGlobalPipes(
@@ -34,5 +44,11 @@ export function configureApp(app: INestApplication): void {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('api', app, document, {
+    customCssUrl: `${SWAGGER_UI_CDN}/swagger-ui.css`,
+    customJs: [
+      `${SWAGGER_UI_CDN}/swagger-ui-bundle.js`,
+      `${SWAGGER_UI_CDN}/swagger-ui-standalone-preset.js`,
+    ],
+  });
 }

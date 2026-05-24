@@ -75,6 +75,10 @@ describe('AppController (e2e)', () => {
       .expect('Content-Type', /html/)
       .expect((res) => {
         expect(res.text).toContain('swagger-ui-bundle.js');
+        expect(res.text).toContain('cdn.jsdelivr.net/npm/swagger-ui-dist');
+        expect(res.headers['content-security-policy']).toContain(
+          'https://cdn.jsdelivr.net',
+        );
       });
   });
 
