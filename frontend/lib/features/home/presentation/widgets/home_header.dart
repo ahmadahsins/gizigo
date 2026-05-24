@@ -7,12 +7,14 @@ class HomeHeader extends StatelessWidget {
   const HomeHeader({
     super.key,
     required this.userName,
+    required this.profilePhotoUrl,
     required this.locationName,
     required this.onLocationTap,
     required this.onProfileTap,
   });
 
   final String userName;
+  final String profilePhotoUrl;
   final String? locationName;
   final VoidCallback onLocationTap;
   final VoidCallback onProfileTap;
@@ -90,14 +92,50 @@ class HomeHeader extends StatelessWidget {
           child: InkWell(
             onTap: onProfileTap,
             customBorder: const CircleBorder(),
-            child: const CircleAvatar(
-              radius: 24,
-              backgroundColor: AppColors.primary,
-              child: Icon(Icons.person_rounded, color: Colors.white, size: 28),
-            ),
+            child: _HomeProfileAvatar(imageUrl: profilePhotoUrl),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _HomeProfileAvatar extends StatelessWidget {
+  const _HomeProfileAvatar({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 48.0;
+    final url = imageUrl.trim();
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppColors.primary,
+          shape: BoxShape.circle,
+        ),
+        child: ClipOval(
+          child: url.isEmpty
+              ? const Icon(Icons.person_rounded, color: Colors.white, size: 28)
+              : Image.network(
+                  url,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.person_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    );
+                  },
+                ),
+        ),
+      ),
     );
   }
 }

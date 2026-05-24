@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../data/location_reverse_geocoding_service.dart';
 import '../../domain/entities/location_item.dart';
 import '../widgets/location_map_view.dart';
@@ -450,7 +451,7 @@ class _LocationSearchSuggestions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = isLoading
-        ? const _LocationSearchStatus(message: 'Mencari lokasi...')
+        ? const _LocationSuggestionLoadingList()
         : message != null
         ? _LocationSearchStatus(message: message!)
         : ListView.separated(
@@ -480,6 +481,42 @@ class _LocationSearchSuggestions extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 292),
         child: content,
+      ),
+    );
+  }
+}
+
+class _LocationSuggestionLoadingList extends StatelessWidget {
+  const _LocationSuggestionLoadingList();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeleton(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(
+          3,
+          (index) => const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppSkeletonCircle(size: 20),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppSkeletonLine(width: 180, height: 14),
+                      SizedBox(height: 8),
+                      AppSkeletonLine(height: 10),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -629,51 +666,55 @@ class _LocationSelectionSheet extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: isResolvingAddress
-                        ? const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.6,
-                              color: AppColors.primary,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.location_on,
-                            color: AppColors.primary,
-                            size: 28,
-                          ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.location_on,
+                      color: AppColors.primary,
+                      size: 28,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          location.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.heading3.copyWith(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF333333),
+                    child: isResolvingAddress
+                        ? const AppSkeleton(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AppSkeletonLine(width: 170, height: 18),
+                                SizedBox(height: 10),
+                                AppSkeletonLine(height: 11),
+                                SizedBox(height: 7),
+                                AppSkeletonLine(width: 220, height: 11),
+                              ],
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                location.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.heading3.copyWith(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF333333),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                location.address,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  fontSize: 11,
+                                  height: 1.25,
+                                  color: const Color(0xFF555555),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          location.address,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            fontSize: 11,
-                            height: 1.25,
-                            color: const Color(0xFF555555),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),

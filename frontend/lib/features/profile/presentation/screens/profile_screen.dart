@@ -10,6 +10,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/services/auto_refresh_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../../../router/app_router.dart';
 import '../../data/models/profile_history_item.dart';
 import '../../data/models/profile_user.dart';
@@ -278,6 +279,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
       if (!mounted) return;
 
+      await _evictProfilePhotoCache([
+        _savedProfilePhotoUrl,
+        profile.profilePhotoUrl,
+      ]);
+      if (!mounted) return;
+
       _applyProfile(profile);
       setState(() => _isUploadingPhoto = false);
       AutoRefreshService.instance.refreshNow();
@@ -515,6 +522,17 @@ class _ProfileScreenState extends State<ProfileScreen>
     _discardAccountChanges();
   }
 
+  Future<void> _evictProfilePhotoCache(Iterable<String> urls) async {
+    final seenUrls = <String>{};
+
+    for (final rawUrl in urls) {
+      final url = rawUrl.trim();
+      if (url.isEmpty || !seenUrls.add(url)) continue;
+
+      await NetworkImage(url).evict();
+    }
+  }
+
   void _applyFirebaseFallback() {
     final user = FirebaseAuth.instance.currentUser;
     _savedFullName = _firstPresentName([
@@ -646,17 +664,16 @@ class _ProfileMenuContent extends StatelessWidget {
       children: [
         _BackButton(onPressed: onBack),
         const SizedBox(height: 22),
-        Center(child: _ProfileAvatar(imageUrl: profilePhotoUrl)),
+        Center(
+          child: isLoading
+              ? const AppSkeleton(child: AppSkeletonCircle(size: 108))
+              : _ProfileAvatar(imageUrl: profilePhotoUrl),
+        ),
         const SizedBox(height: 17),
         Center(
           child: isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: AppColors.primary,
-                  ),
+              ? const AppSkeleton(
+                  child: AppSkeletonLine(width: 148, height: 24),
                 )
               : Text(
                   displayName,
@@ -887,12 +904,7 @@ class _HistoryContent extends StatelessWidget {
         CustomSearchBar(onTap: () => context.pushNamed(AppRouter.search)),
         const SizedBox(height: 24),
         if (isLoading)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 28),
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
-          )
+          const _HistoryLoadingList()
         else if (errorMessage != null)
           _ProfileStatusBox(message: errorMessage!, onRetry: onRetry)
         else if (items.isEmpty)
@@ -1044,102 +1056,151 @@ class _AccountContent extends StatelessWidget {
       children: [
         _BackButton(onPressed: onBack),
         const SizedBox(height: 22),
-        Center(
-          child: _ProfileAvatar(
-            size: 124,
-            imageUrl: profilePhotoUrl,
-            showEditButton: isEditing,
-            isUploading: isUploadingPhoto,
-            onEditPhoto: isUploadingPhoto ? null : onEditPhoto,
-          ),
-        ),
-        const SizedBox(height: 63),
-        if (isLoading) ...[
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: 24),
-              child: CircularProgressIndicator(color: AppColors.primary),
+        if (isLoading)
+          const _AccountLoadingContent()
+        else ...[
+          Center(
+            child: _ProfileAvatar(
+              size: 124,
+              imageUrl: profilePhotoUrl,
+              showEditButton: isEditing,
+              isUploading: isUploadingPhoto,
+              onEditPhoto: isUploadingPhoto ? null : onEditPhoto,
             ),
           ),
-        ] else if (errorMessage != null) ...[
+          const SizedBox(height: 63),
+        ],
+        if (!isLoading && errorMessage != null) ...[
           _ProfileStatusBox(message: errorMessage!),
           const SizedBox(height: 22),
         ],
-        _AccountField(
-          label: 'Full Name',
-          controller: fullNameController,
-          enabled: isEditing,
-        ),
-        const SizedBox(height: 22),
-        _AccountField(
-          label: 'Email',
-          controller: emailController,
-          enabled: false,
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 22),
-        Row(
-          children: [
-            Expanded(
-              child: _AccountGenderField(
-                controller: genderController,
-                enabled: isEditing,
-                onChanged: onGenderChanged,
+        if (!isLoading) ...[
+          _AccountField(
+            label: 'Full Name',
+            controller: fullNameController,
+            enabled: isEditing,
+          ),
+          const SizedBox(height: 22),
+          _AccountField(
+            label: 'Email',
+            controller: emailController,
+            enabled: false,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: _AccountGenderField(
+                  controller: genderController,
+                  enabled: isEditing,
+                  onChanged: onGenderChanged,
+                ),
               ),
-            ),
-            const SizedBox(width: 19),
-            Expanded(
-              child: _AccountField(
-                label: 'Age',
-                controller: ageController,
-                enabled: isEditing,
-                keyboardType: TextInputType.number,
+              const SizedBox(width: 19),
+              Expanded(
+                child: _AccountField(
+                  label: 'Age',
+                  controller: ageController,
+                  enabled: isEditing,
+                  keyboardType: TextInputType.number,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        Row(
-          children: [
-            Expanded(
-              child: _AccountField(
-                label: 'Height',
-                controller: heightController,
-                enabled: isEditing,
-                keyboardType: TextInputType.number,
-                suffixText: 'cm',
+            ],
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: _AccountField(
+                  label: 'Height',
+                  controller: heightController,
+                  enabled: isEditing,
+                  keyboardType: TextInputType.number,
+                  suffixText: 'cm',
+                ),
               ),
-            ),
-            const SizedBox(width: 19),
-            Expanded(
-              child: _AccountField(
-                label: 'Weight',
-                controller: weightController,
-                enabled: isEditing,
-                keyboardType: TextInputType.number,
-                suffixText: 'kg',
+              const SizedBox(width: 19),
+              Expanded(
+                child: _AccountField(
+                  label: 'Weight',
+                  controller: weightController,
+                  enabled: isEditing,
+                  keyboardType: TextInputType.number,
+                  suffixText: 'kg',
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
         const Spacer(),
         const SizedBox(height: 36),
-        if (isEditing) ...[
-          _PrimaryProfileButton(
-            text: isSaving ? 'Saving...' : 'Save Changes',
-            onPressed: isSaving ? null : onSave,
-          ),
-          const SizedBox(height: 18),
-          _SecondaryProfileButton(
-            text: 'Discard Changes',
-            onPressed: isSaving ? null : onDiscard,
-          ),
-        ] else
-          _PrimaryProfileButton(
-            text: 'Edit',
-            onPressed: isLoading ? null : onEdit,
-          ),
+        if (!isLoading)
+          if (isEditing) ...[
+            _PrimaryProfileButton(
+              text: isSaving ? 'Saving...' : 'Save Changes',
+              onPressed: isSaving ? null : onSave,
+            ),
+            const SizedBox(height: 18),
+            _SecondaryProfileButton(
+              text: 'Discard Changes',
+              onPressed: isSaving ? null : onDiscard,
+            ),
+          ] else
+            _PrimaryProfileButton(text: 'Edit', onPressed: onEdit),
       ],
+    );
+  }
+}
+
+class _HistoryLoadingList extends StatelessWidget {
+  const _HistoryLoadingList();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        AppSkeletonRecommendationCard(),
+        AppSkeletonRecommendationCard(),
+        AppSkeletonRecommendationCard(),
+      ],
+    );
+  }
+}
+
+class _AccountLoadingContent extends StatelessWidget {
+  const _AccountLoadingContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppSkeleton(
+      child: Column(
+        children: [
+          Center(child: AppSkeletonCircle(size: 124)),
+          SizedBox(height: 63),
+          AppSkeletonBox(height: 54, borderRadius: 8),
+          SizedBox(height: 22),
+          AppSkeletonBox(height: 54, borderRadius: 8),
+          SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(child: AppSkeletonBox(height: 54, borderRadius: 8)),
+              SizedBox(width: 19),
+              Expanded(child: AppSkeletonBox(height: 54, borderRadius: 8)),
+            ],
+          ),
+          SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(child: AppSkeletonBox(height: 54, borderRadius: 8)),
+              SizedBox(width: 19),
+              Expanded(child: AppSkeletonBox(height: 54, borderRadius: 8)),
+            ],
+          ),
+          SizedBox(height: 36),
+          AppSkeletonBox(height: 52, borderRadius: 5),
+        ],
+      ),
     );
   }
 }

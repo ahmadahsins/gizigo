@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../data/models/home_category.dart';
 import 'section_header.dart';
 import 'category_item_card.dart';
@@ -107,20 +108,22 @@ class _CategoryLoadingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: List.generate(
-          5,
-          (index) => Container(
-            width: 76,
-            height: 104,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFEFEFEF)),
+    return AppSkeleton(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Row(
+          children: List.generate(
+            5,
+            (index) => const SizedBox(
+              width: 92,
+              child: Column(
+                children: [
+                  AppSkeletonBox(width: 76, height: 76, borderRadius: 16),
+                  SizedBox(height: 10),
+                  AppSkeletonLine(width: 58),
+                ],
+              ),
             ),
           ),
         ),
