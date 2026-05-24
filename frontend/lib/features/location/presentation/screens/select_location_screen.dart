@@ -10,6 +10,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/services/auto_refresh_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../../../router/app_router.dart';
 import '../../data/location_remote_data_source.dart';
 import '../../data/location_reverse_geocoding_service.dart';
@@ -551,23 +552,14 @@ class _EmptyLocations extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) return const _LocationLoadingList();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 28),
       child: Center(
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isLoading) ...[
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
             Text(
               message,
               style: AppTextStyles.bodyMedium.copyWith(
@@ -575,6 +567,43 @@ class _EmptyLocations extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationLoadingList extends StatelessWidget {
+  const _LocationLoadingList();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeleton(
+      child: Column(
+        children: List.generate(
+          5,
+          (index) => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppSkeletonCircle(size: 38),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppSkeletonLine(width: 190, height: 16),
+                      SizedBox(height: 8),
+                      AppSkeletonLine(height: 11),
+                      SizedBox(height: 6),
+                      AppSkeletonLine(width: 220, height: 11),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

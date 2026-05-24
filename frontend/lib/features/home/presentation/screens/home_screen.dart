@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/services/auto_refresh_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../../../router/app_router.dart';
 import '../../../location/domain/entities/location_item.dart';
 import '../../data/models/home_category.dart';
@@ -50,7 +51,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final request = _homeRequest;
     final fallbackCategories = ref.watch(homeCategoriesProvider);
-    final userName = ref.watch(homeUserNameProvider).valueOrNull ?? 'there';
+    final userProfile =
+        ref.watch(homeUserProfileProvider).valueOrNull ??
+        const HomeUserProfile(displayName: 'there', profilePhotoUrl: '');
     final homeAsync = ref.watch(homeDataProvider(request));
     final homeData = homeAsync.valueOrNull;
     final categories = homeData?.categories ?? fallbackCategories;
@@ -72,7 +75,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: HomeHeader(
-                    userName: userName,
+                    userName: userProfile.displayName,
+                    profilePhotoUrl: userProfile.profilePhotoUrl,
                     locationName: _selectedLocation?.name,
                     onLocationTap: _openLocationSelection,
                     onProfileTap: _openProfile,
@@ -209,7 +213,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Future<void> _refreshHomeData() async {
     final previousRequest = _homeRequest;
 
-    ref.invalidate(homeUserNameProvider);
+    ref.invalidate(homeUserProfileProvider);
     ref.invalidate(selectedLocationProvider);
     ref.invalidate(homeDataProvider(previousRequest));
 
@@ -261,9 +265,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (isLoading) {
       return const Column(
         children: [
-          _HomeLoadingCard(height: 88, margin: EdgeInsets.only(bottom: 16)),
-          _HomeLoadingCard(height: 88, margin: EdgeInsets.only(bottom: 16)),
-          _HomeLoadingCard(height: 88, margin: EdgeInsets.only(bottom: 16)),
+          AppSkeletonRecommendationCard(),
+          AppSkeletonRecommendationCard(),
+          AppSkeletonRecommendationCard(),
         ],
       );
     }
@@ -333,27 +337,17 @@ class _HomeEmptyState extends StatelessWidget {
 }
 
 class _HomeLoadingCard extends StatelessWidget {
-  const _HomeLoadingCard({required this.height, this.margin = EdgeInsets.zero});
+  const _HomeLoadingCard({required this.height});
 
   final double height;
-  final EdgeInsetsGeometry margin;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      width: double.infinity,
-      margin: margin,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE8E8E8)),
-      ),
-      child: const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-          strokeWidth: 2.4,
-        ),
+    return AppSkeleton(
+      child: AppSkeletonBox(
+        height: height,
+        width: double.infinity,
+        borderRadius: 8,
       ),
     );
   }

@@ -27,6 +27,16 @@ class HomeRequest {
   int get hashCode => Object.hash(lat, lng);
 }
 
+class HomeUserProfile {
+  const HomeUserProfile({
+    required this.displayName,
+    required this.profilePhotoUrl,
+  });
+
+  final String displayName;
+  final String profilePhotoUrl;
+}
+
 final dioClientProvider = Provider<DioClient>((ref) => DioClient());
 
 final locationStorageServiceProvider = Provider<LocationStorageService>((ref) {
@@ -73,8 +83,10 @@ final selectedLocationProvider = FutureProvider.autoDispose<LocationItem?>((
   }
 });
 
-final homeUserNameProvider = FutureProvider.autoDispose<String>((ref) async {
-  final fallbackName = _firebaseUserName();
+final homeUserProfileProvider = FutureProvider.autoDispose<HomeUserProfile>((
+  ref,
+) async {
+  final fallbackProfile = _firebaseUserProfile();
 
   try {
     final response = await ref
@@ -82,16 +94,28 @@ final homeUserNameProvider = FutureProvider.autoDispose<String>((ref) async {
         .get(ApiConstants.usersMe);
     final data = response.data;
     if (data is Map<String, dynamic>) {
-      return _firstPresentName([
-        data['name'],
-        data['username'],
-        data['email'],
-        fallbackName,
-      ]);
+      return HomeUserProfile(
+        displayName: _firstPresentName([
+          data['name'],
+          data['username'],
+          data['email'],
+          fallbackProfile.displayName,
+        ]),
+        profilePhotoUrl: _firstPresentText([
+          data['profile_photo_url'],
+          fallbackProfile.profilePhotoUrl,
+        ]),
+      );
     }
   } catch (_) {}
 
-  return fallbackName;
+  return fallbackProfile;
+});
+
+final homeUserNameProvider = FutureProvider.autoDispose<String>((ref) async {
+  final profile = await ref.watch(homeUserProfileProvider.future);
+
+  return profile.displayName;
 });
 
 final homeDataProvider = FutureProvider.autoDispose
@@ -101,10 +125,13 @@ final homeDataProvider = FutureProvider.autoDispose
           .getHomeData(lat: request.lat, lng: request.lng);
     });
 
-String _firebaseUserName() {
+HomeUserProfile _firebaseUserProfile() {
   final user = FirebaseAuth.instance.currentUser;
 
-  return _firstPresentName([user?.displayName, user?.email, 'there']);
+  return HomeUserProfile(
+    displayName: _firstPresentName([user?.displayName, user?.email, 'there']),
+    profilePhotoUrl: _firstPresentText([user?.photoURL]),
+  );
 }
 
 String _firstPresentName(List<Object?> values) {
@@ -114,6 +141,15 @@ String _firstPresentName(List<Object?> values) {
   }
 
   return 'there';
+}
+
+String _firstPresentText(List<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isNotEmpty) return text;
+  }
+
+  return '';
 }
 
 String _cleanName(Object? value) {

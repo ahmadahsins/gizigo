@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../../home/presentation/widgets/filter_dropdown_chip.dart';
 import '../../../home/presentation/widgets/recommendation_card.dart';
 import '../../domain/entities/search_food_item.dart';
@@ -77,7 +78,7 @@ class SearchResultsContent extends StatelessWidget {
         const SizedBox(height: 27),
         Expanded(
           child: isLoading
-              ? const _SearchLoadingState()
+              ? _SearchLoadingState(horizontalPadding: horizontalPadding)
               : errorMessage != null
               ? _SearchStatus(message: errorMessage!)
               : foods.isEmpty
@@ -124,12 +125,18 @@ class _SearchResultTile extends StatelessWidget {
 }
 
 class _SearchLoadingState extends StatelessWidget {
-  const _SearchLoadingState();
+  const _SearchLoadingState({required this.horizontalPadding});
+
+  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(color: AppColors.primary),
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 34),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return const AppSkeletonRecommendationCard();
+      },
     );
   }
 }

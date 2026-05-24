@@ -57,6 +57,8 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _searchDebounce;
   String _query = '';
   String? _selectedCategoryKey;
+  String? _selectedCategoryTitle;
+  bool _isUpdatingSearchText = false;
   LocationItem? _selectedLocation;
   List<HomeCategory> _categories = const [];
   SearchFoodItem? _featuredFood;
@@ -89,11 +91,14 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _searchRemoteDataSource = SearchRemoteDataSource(DioClient());
     _selectedCategoryKey = _cleanText(widget.initialCategoryKey);
+    _selectedCategoryTitle = _cleanText(widget.initialCategoryTitle);
     final initialQuery = _cleanText(widget.initialQuery);
     if (initialQuery != null) {
-      _searchController.text = initialQuery;
-      _query = initialQuery;
+      _setSearchText(initialQuery);
+    } else if (_selectedCategoryKey != null) {
+      _setSearchText(_selectedCategoryDisplayText);
     }
+    _isLoadingSearch = _hasSearchRequest;
     _searchController.addListener(_handleSearchChanged);
     Future.microtask(_loadInitialData);
 
@@ -115,7 +120,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasQuery = _query.trim().isNotEmpty;
+    final hasSearchText = _searchController.text.trim().isNotEmpty;
 
     return PopScope(
       canPop: false,
@@ -141,7 +146,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       controller: _searchController,
                       focusNode: _searchFocusNode,
                       searchFieldColor: searchFieldColor,
-                      hasQuery: hasQuery,
+                      hasQuery: hasSearchText,
                       onBack: _handleBack,
                       onClear: _clearSearch,
                       onSubmitted: _submitSearch,
@@ -193,12 +198,13 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _loadInitialData() async {
     _selectedLocation = await _locationStorage.readSelectedLocation();
-
-    await Future.wait([_loadCategories(), _loadFeaturedFood()]);
+    if (!mounted) return;
 
     if (_hasSearchRequest) {
-      _runSearch(showLoading: true);
+      unawaited(_runSearch(showLoading: true));
     }
+
+    await Future.wait([_loadCategories(), _loadFeaturedFood()]);
   }
 
   Future<void> _loadCategories() async {
@@ -235,6 +241,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _handleSearchChanged() {
+    if (_isUpdatingSearchText) return;
+
     final value = _searchController.text;
     if (value == _query) return;
 
@@ -377,18 +385,21 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _selectCategory(HomeCategory category) {
     _unfocusSearch();
-    _searchController.clear();
+    _setSearchText(category.title);
     setState(() {
       _query = '';
       _selectedCategoryKey = category.key;
+      _selectedCategoryTitle = category.title;
     });
     _runSearch(showLoading: true);
   }
 
   void _clearSearch() {
-    _searchController.clear();
+    _setSearchText('');
     setState(() {
+      _query = '';
       _selectedCategoryKey = null;
+      _selectedCategoryTitle = null;
     });
     _searchFocusNode.requestFocus();
     _scheduleSearch();
@@ -536,5 +547,26 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _cleanText(String? value) {
     final text = value?.trim();
     return text == null || text.isEmpty ? null : text;
+  }
+
+  String get _selectedCategoryDisplayText {
+    final title = _selectedCategoryTitle;
+    if (title != null) return title;
+
+    return _selectedCategoryKey
+            ?.split('_')
+            .where((part) => part.isNotEmpty)
+            .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+            .join(' ') ??
+        '';
+  }
+
+  void _setSearchText(String value) {
+    _isUpdatingSearchText = true;
+    _searchController.text = value;
+    _searchController.selection = TextSelection.collapsed(
+      offset: _searchController.text.length,
+    );
+    _isUpdatingSearchText = false;
   }
 }

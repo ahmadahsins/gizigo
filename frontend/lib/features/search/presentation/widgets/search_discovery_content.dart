@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../../home/data/models/home_category.dart';
 import '../../../home/presentation/widgets/featured_food_card.dart';
 import '../../domain/entities/search_food_item.dart';
@@ -217,15 +218,12 @@ class _FeaturedLoadingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 292,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE8E8E8)),
+    return const AppSkeleton(
+      child: AppSkeletonBox(
+        height: 292,
+        width: double.infinity,
+        borderRadius: 8,
       ),
-      child: const Center(child: CircularProgressIndicator()),
     );
   }
 }

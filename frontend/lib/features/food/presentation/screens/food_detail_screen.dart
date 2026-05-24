@@ -7,6 +7,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/services/auto_refresh_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_skeleton.dart';
 import '../../../home/presentation/widgets/rating_badge.dart';
 import '../../data/food_remote_data_source.dart';
 import '../../data/models/food_detail.dart';
@@ -49,11 +50,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
     final food = _food;
 
     if (_isLoading && food == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-      );
+      return const Scaffold(body: _FoodDetailSkeleton());
     }
 
     if (food == null) {
@@ -229,6 +226,91 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
   }
 }
 
+class _FoodDetailSkeleton extends StatelessWidget {
+  const _FoodDetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeleton(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AppSkeletonBox(
+              width: double.infinity,
+              height: 280,
+              borderRadius: 0,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AppSkeletonLine(height: 24),
+                            SizedBox(height: 10),
+                            AppSkeletonLine(width: 160),
+                            SizedBox(height: 10),
+                            AppSkeletonLine(
+                              width: 64,
+                              height: 24,
+                              borderRadius: 12,
+                            ),
+                            SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                AppSkeletonLine(
+                                  width: 112,
+                                  height: 34,
+                                  borderRadius: 12,
+                                ),
+                                AppSkeletonLine(
+                                  width: 104,
+                                  height: 34,
+                                  borderRadius: 12,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      AppSkeletonLine(width: 78, height: 18),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  const AppSkeletonLine(width: 120, height: 18),
+                  const SizedBox(height: 10),
+                  const AppSkeletonLine(height: 12),
+                  const SizedBox(height: 8),
+                  const AppSkeletonLine(height: 12),
+                  const SizedBox(height: 8),
+                  const AppSkeletonLine(width: 230, height: 12),
+                  const SizedBox(height: 28),
+                  const AppSkeletonLine(width: 150, height: 18),
+                  const SizedBox(height: 12),
+                  const AppSkeletonBox(height: 76, borderRadius: 8),
+                  const SizedBox(height: 10),
+                  const AppSkeletonBox(height: 76, borderRadius: 8),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FoodDetailHeader extends StatelessWidget {
   const _FoodDetailHeader({required this.food, required this.onRatingTap});
 
@@ -266,6 +348,10 @@ class _FoodDetailHeader extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               RatingBadge(text: food.ratingText, onTap: onRatingTap),
+              if (food.healthLabels.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _FoodHealthLabelRow(labels: food.healthLabels),
+              ],
             ],
           ),
         ),
@@ -285,6 +371,139 @@ class _FoodDetailHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+class _FoodHealthLabelRow extends StatelessWidget {
+  const _FoodHealthLabelRow({required this.labels});
+
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayLabels = labels
+        .map(_FoodHealthLabel.displayTextFor)
+        .where((label) => label.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    if (displayLabels.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        children: [
+          for (var index = 0; index < displayLabels.length; index++) ...[
+            _FoodHealthLabel(displayLabels[index]),
+            if (index != displayLabels.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FoodHealthLabel extends StatelessWidget {
+  const _FoodHealthLabel(this.label);
+
+  static const EdgeInsetsGeometry _padding = EdgeInsets.symmetric(
+    horizontal: 9,
+    vertical: 6,
+  );
+
+  final String label;
+
+  static String displayTextFor(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return '';
+
+    final normalized = _normalizedKey(text);
+    return switch (normalized) {
+      'highprotein' => 'High Protein',
+      'vegetarian' || 'vegan' => 'Vegetarian',
+      'lowcalorie' || 'lowcalories' => 'Low Calories',
+      'glutenfree' => 'Gluten Free',
+      _ =>
+        text
+            .replaceAll(RegExp(r'[_-]+'), ' ')
+            .split(RegExp(r'\s+'))
+            .where((part) => part.isNotEmpty)
+            .map(
+              (part) =>
+                  '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+            )
+            .join(' '),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _FoodHealthLabelColors.forLabel(label);
+
+    return Semantics(
+      label: label,
+      child: Container(
+        padding: _padding,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: colors.background,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: colors.foreground,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FoodHealthLabelColors {
+  const _FoodHealthLabelColors({
+    required this.background,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color foreground;
+
+  static const _defaultColors = _FoodHealthLabelColors(
+    background: Color(0xFFEDEDED),
+    foreground: Color(0xFF4A4A4A),
+  );
+
+  static _FoodHealthLabelColors forLabel(String label) {
+    return switch (_normalizedKey(label)) {
+      'highprotein' => const _FoodHealthLabelColors(
+        background: Color(0xFFFCDCD8),
+        foreground: Color(0xFF9B2825),
+      ),
+      'vegetarian' || 'vegan' => const _FoodHealthLabelColors(
+        background: Color(0xFFD1F1EC),
+        foreground: Color(0xFF087A5A),
+      ),
+      'lowcalorie' || 'lowcalories' => const _FoodHealthLabelColors(
+        background: Color(0xFFF5F6D5),
+        foreground: Color(0xFF8A4C17),
+      ),
+      'glutenfree' => const _FoodHealthLabelColors(
+        background: Color(0xFFD6E9F8),
+        foreground: Color(0xFF235C82),
+      ),
+      _ => _defaultColors,
+    };
+  }
+}
+
+String _normalizedKey(String value) {
+  return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 }
 
 class _DescriptionSection extends StatelessWidget {
