@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { configureApp } from './../src/bootstrap';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -13,6 +14,7 @@ describe('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    configureApp(app);
     await app.init();
   });
 
@@ -64,6 +66,37 @@ describe('AppController (e2e)', () => {
         expect(res.body.items).toEqual([]);
         expect(res.body.query).toBe('test');
       });
+  });
+
+  it('/api (GET) serves Swagger UI', () => {
+    return request(app.getHttpServer())
+      .get('/api')
+      .expect(200)
+      .expect('Content-Type', /html/)
+      .expect((res) => {
+        expect(res.text).toContain('swagger-ui-bundle.js');
+      });
+  });
+
+  it('/api-json (GET) serves the OpenAPI document', () => {
+    return request(app.getHttpServer())
+      .get('/api-json')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.info.title).toBe('GiziGo API');
+      });
+  });
+
+  it('/api Swagger static assets are available', async () => {
+    await request(app.getHttpServer())
+      .get('/api/swagger-ui.css')
+      .expect(200)
+      .expect('Content-Type', /css/);
+
+    await request(app.getHttpServer())
+      .get('/api/swagger-ui-bundle.js')
+      .expect(200)
+      .expect('Content-Type', /javascript/);
   });
 
   afterEach(async () => {
