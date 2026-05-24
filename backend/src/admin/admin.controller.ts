@@ -4,9 +4,7 @@ import {
   Put,
   Delete,
   Body,
-  HttpStatus,
   Param,
-  ParseFilePipeBuilder,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -26,6 +24,10 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserRole } from '../common/enums/user-role.enum';
+import {
+  buildImageUploadPipe,
+  IMAGE_UPLOAD_MAX_SIZE_BYTES,
+} from '../common/pipes/image-upload.pipe';
 import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 import { FoodsManagementService } from '../foods/foods-management.service';
 import { CreateFoodDto } from './dto/create-food.dto';
@@ -95,7 +97,7 @@ export class AdminController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: IMAGE_UPLOAD_MAX_SIZE_BYTES },
     }),
   )
   @ApiOperation({
@@ -123,12 +125,7 @@ export class AdminController {
   })
   async uploadFoodPhoto(
     @Param('id') id: string,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/ })
-        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
-        .build({ errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY }),
-    )
+    @UploadedFile(buildImageUploadPipe())
     file: UploadedImageFile,
   ) {
     return this.foodsManagementService.uploadFoodPhoto(id, file, {
