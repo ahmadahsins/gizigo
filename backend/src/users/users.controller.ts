@@ -2,9 +2,7 @@ import {
   Body,
   Controller,
   Get,
-  HttpStatus,
   Patch,
-  ParseFilePipeBuilder,
   Post,
   Query,
   Req,
@@ -23,6 +21,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
+import {
+  buildImageUploadPipe,
+  IMAGE_UPLOAD_MAX_SIZE_BYTES,
+} from '../common/pipes/image-upload.pipe';
 import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 import { UsersService } from './users.service';
 import { RecordRecentlyViewedDto } from './dto/record-recently-viewed.dto';
@@ -81,7 +83,7 @@ export class UsersController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: IMAGE_UPLOAD_MAX_SIZE_BYTES },
     }),
   )
   @ApiOperation({
@@ -105,12 +107,7 @@ export class UsersController {
   })
   async uploadProfilePhoto(
     @Req() req: { user: { uid: string } },
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/ })
-        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
-        .build({ errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY }),
-    )
+    @UploadedFile(buildImageUploadPipe())
     file: UploadedImageFile,
   ) {
     return this.usersService.uploadProfilePhoto(req.user.uid, file);
