@@ -16,7 +16,9 @@ import '../widgets/location_map_view.dart';
 import '../widgets/location_search_field.dart';
 
 class SelectLocationMapScreen extends StatefulWidget {
-  const SelectLocationMapScreen({super.key});
+  const SelectLocationMapScreen({super.key, this.initialLocation});
+
+  final LocationItem? initialLocation;
 
   @override
   State<SelectLocationMapScreen> createState() =>
@@ -54,6 +56,7 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
   bool _isSearchingLocations = false;
   bool _showSearchSuggestions = false;
   bool _canApplyInitialCurrentLocation = true;
+  bool _isGettingCurrentLocation = false;
 
   bool get _hasSearchText => _searchController.text.trim().isNotEmpty;
   bool get _shouldShowSearchSuggestions {
@@ -66,6 +69,14 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
   @override
   void initState() {
     super.initState();
+    final initialLocation = widget.initialLocation;
+    if (initialLocation != null) {
+      _canApplyInitialCurrentLocation = false;
+      _selectedPlace = LocationMapPlace(
+        location: initialLocation,
+        type: LocationMapPlaceType.selected,
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _centerMapOnCurrentLocation();
     });
@@ -97,6 +108,8 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
                 onMapIdle: _handleMapIdle,
               ),
             ),
+            if (_isGettingCurrentLocation)
+              const Positioned.fill(child: _CurrentLocationLoadingOverlay()),
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(28, 24, 34, 0),
@@ -190,6 +203,8 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
       return;
     }
 
+    setState(() => _isGettingCurrentLocation = true);
+
     try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -203,7 +218,12 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
       _mapController.move(point, 16);
       _setPendingMapPoint(point);
       _resolveAddress(point);
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() => _isGettingCurrentLocation = false);
+      }
+    }
   }
 
   Future<bool> _prepareLocationAccess() async {
@@ -481,6 +501,57 @@ class _LocationSearchSuggestions extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 292),
         child: content,
+      ),
+    );
+  }
+}
+
+class _CurrentLocationLoadingOverlay extends StatelessWidget {
+  const _CurrentLocationLoadingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black26,
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.16),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Getting your location...',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF333333),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

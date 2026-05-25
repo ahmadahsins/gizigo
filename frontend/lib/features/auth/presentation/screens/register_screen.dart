@@ -9,8 +9,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../widgets/auth_text_field.dart';
 import '../widgets/auth_dropdown_field.dart';
+import '../widgets/auth_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/google_button.dart';
 
@@ -106,7 +106,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final googleUser = await GoogleSignIn().signIn();
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -177,7 +179,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _syncBackendProfile() async {
     final client = DioClient(storage: _secureStorage);
-    await client.post(ApiConstants.authSync);
+    await client.post(
+      ApiConstants.signup,
+      data: const {'account_type': 'customer'},
+    );
     await client.patch(
       ApiConstants.usersMe,
       data: {

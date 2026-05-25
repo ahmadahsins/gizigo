@@ -26,7 +26,7 @@ class _CategoriesSectionState extends State<CategoriesSection> {
 
   @override
   Widget build(BuildContext context) {
-    final canExpand = widget.categories.length > 5;
+    final canExpand = !widget.isLoading && widget.categories.length > 5;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

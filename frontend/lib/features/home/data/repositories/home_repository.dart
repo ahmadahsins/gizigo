@@ -7,63 +7,15 @@ class HomeRepository {
 
   final HomeRemoteDataSource _remoteDataSource;
 
-  static const List<HomeCategory> _localCategories = [
-    HomeCategory(
-      key: 'main_course',
-      title: 'Main Course',
-      iconAsset: 'assets/icons/categories-menu/main-course.svg',
-    ),
-    HomeCategory(
-      key: 'appetizers',
-      title: 'Appetizers',
-      iconAsset: 'assets/icons/categories-menu/appetizers.svg',
-    ),
-    HomeCategory(
-      key: 'snacks',
-      title: 'Snacks',
-      iconAsset: 'assets/icons/categories-menu/snacks.svg',
-    ),
-    HomeCategory(
-      key: 'desserts',
-      title: 'Desserts',
-      iconAsset: 'assets/icons/categories-menu/desserts.svg',
-    ),
-    HomeCategory(
-      key: 'beverages',
-      title: 'Beverages',
-      iconAsset: 'assets/icons/categories-menu/beverages.svg',
-    ),
-    HomeCategory(
-      key: 'breakfast',
-      title: 'Breakfast',
-      iconAsset: 'assets/icons/categories-menu/breakfast.svg',
-    ),
-    HomeCategory(
-      key: 'lunch',
-      title: 'Lunch',
-      iconAsset: 'assets/icons/categories-menu/lunch.svg',
-    ),
-    HomeCategory(
-      key: 'dinner',
-      title: 'Dinner',
-      iconAsset: 'assets/icons/categories-menu/dinner.svg',
-    ),
-    HomeCategory(
-      key: 'salads',
-      title: 'Salads',
-      iconAsset: 'assets/icons/categories-menu/salads.svg',
-    ),
-  ];
-
-  List<HomeCategory> get localCategories => _localCategories;
+  List<HomeCategory> get localCategories => HomeCategory.defaultCategories;
 
   Future<List<HomeCategory>> getCategories() async {
     try {
       final categories = await _remoteDataSource.getCategories();
-      if (categories.isNotEmpty) return categories;
+      return HomeCategory.withDefaultCategories(categories);
     } catch (_) {}
 
-    return _localCategories;
+    return HomeCategory.defaultCategories;
   }
 
   Future<HomeData> getHomeData({double? lat, double? lng}) async {
@@ -81,7 +33,7 @@ class HomeRepository {
       );
     } catch (error) {
       return HomeData(
-        categories: _localCategories,
+        categories: HomeCategory.defaultCategories,
         featured: const [],
         recommendations: const [],
         recommendationsError: error,

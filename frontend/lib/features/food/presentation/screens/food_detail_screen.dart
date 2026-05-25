@@ -408,7 +408,7 @@ class _FoodHealthLabel extends StatelessWidget {
 
   static const EdgeInsetsGeometry _padding = EdgeInsets.symmetric(
     horizontal: 9,
-    vertical: 6,
+    vertical: 62,
   );
 
   final String label;

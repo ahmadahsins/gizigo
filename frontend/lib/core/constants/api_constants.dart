@@ -35,6 +35,10 @@ class ApiConstants {
   static const String metaNutritionGoals = '/meta/nutrition-goals';
   static const String metaLocationsSearch = '/meta/locations/search';
 
+  static const String merchantMe = '/merchant/me';
+  static const String merchantFoods = '/merchant/foods';
+
+  static const String adminMerchants = '/admin/merchants';
   static const String adminFoods = '/admin/foods';
 
   static const int connectionTimeout = 30000;
@@ -44,4 +48,18 @@ class ApiConstants {
 
   static String adminFoodDetails(String id) =>
       '$adminFoods/${Uri.encodeComponent(id)}';
+
+  static String merchantFoodDetails(String id) =>
+      '$merchantFoods/${Uri.encodeComponent(id)}';
+
+  static String merchantFoodPhoto(String id) =>
+      '${merchantFoodDetails(id)}/photo';
+
+  static String adminMerchantDetails(String id) =>
+      '$adminMerchants/${Uri.encodeComponent(id)}';
+
+  static String adminMerchantFoods(String id) =>
+      '${adminMerchantDetails(id)}/foods';
+
+  static String adminFoodPhoto(String id) => '${adminFoodDetails(id)}/photo';
 }

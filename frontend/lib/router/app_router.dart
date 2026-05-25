@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 import '../../features/splash/presentation/screens/splash_screen.dart';
 import '../../features/splash/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/merchant_register_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/food/presentation/screens/food_detail_screen.dart';
+import '../../features/location/domain/entities/location_item.dart';
 import '../../features/location/presentation/screens/select_location_map_screen.dart';
 import '../../features/location/presentation/screens/select_location_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
@@ -20,6 +22,7 @@ class AppRouter {
   static const String welcome = 'welcome';
   static const String login = 'login';
   static const String register = 'register';
+  static const String registerMerchant = 'register-merchant';
   static const String home = 'home';
   static const String search = 'search';
   static const String selectLocation = 'select-location';
@@ -101,6 +104,29 @@ class AppRouter {
         ),
       ),
 
+      // Merchant register (no bottom nav)
+      GoRoute(
+        path: '/register/merchant',
+        name: registerMerchant,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const MerchantRegisterScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.ease;
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        ),
+      ),
+
       // Main app screens (no bottom nav)
       GoRoute(
         path: '/',
@@ -128,7 +154,13 @@ class AppRouter {
       GoRoute(
         path: '/select-location/map',
         name: selectLocationMap,
-        builder: (context, state) => const SelectLocationMapScreen(),
+        builder: (context, state) {
+          return SelectLocationMapScreen(
+            initialLocation: state.extra is LocationItem
+                ? state.extra as LocationItem
+                : null,
+          );
+        },
       ),
       GoRoute(
         path: '/profile',
