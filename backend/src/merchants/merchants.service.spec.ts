@@ -13,6 +13,7 @@ describe('MerchantsService', () => {
     get: jest.Mock;
   };
   let service: MerchantsService;
+  let getUser: jest.Mock;
 
   beforeEach(() => {
     merchantRef = {
@@ -31,10 +32,14 @@ describe('MerchantsService', () => {
       }),
       get: jest.fn(),
     };
+    getUser = jest.fn().mockResolvedValue({ email: null });
 
     const firebaseService = {
       getFirestore: jest.fn().mockReturnValue({
         collection: jest.fn().mockReturnValue(merchantsCollection),
+      }),
+      getAuth: jest.fn().mockReturnValue({
+        getUser,
       }),
     };
 
@@ -83,6 +88,33 @@ describe('MerchantsService', () => {
     await expect(service.getMerchant('missing')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('returns stored business email for the business profile', async () => {
+    merchantRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        merchant_id: 'merchant_a',
+        business_email: 'owner@store.test',
+      }),
+    });
+
+    const result = await service.getMerchant('merchant_a');
+
+    expect(result.business_email).toBe('owner@store.test');
+  });
+
+  it('reads business email from Auth for a legacy merchant profile', async () => {
+    getUser.mockResolvedValue({ email: 'legacy@store.test' });
+    merchantRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ merchant_id: 'merchant_a', owner_uid: 'owner_a' }),
+    });
+
+    const result = await service.getMerchant('merchant_a');
+
+    expect(getUser).toHaveBeenCalledWith('owner_a');
+    expect(result.business_email).toBe('legacy@store.test');
   });
 
   it('filters inactive merchants in list query', async () => {

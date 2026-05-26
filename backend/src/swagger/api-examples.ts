@@ -23,6 +23,7 @@ export const MERCHANT_PROFILE_EXAMPLE = {
   id: 'firebaseUidExample123',
   merchant_id: 'firebaseUidExample123',
   name: 'Warteg Sendowo',
+  business_email: 'owner@warteg-sendowo.id',
   address: 'Jl. Margonda Raya No. 12, Depok',
   lat: -6.3729,
   lng: 106.8346,
@@ -35,10 +36,11 @@ export const MERCHANT_PROFILE_EXAMPLE = {
 
 export const ADMIN_CREATE_MERCHANT_BODY_EXAMPLE = {
   name: 'Warung Sehat',
+  business_email: 'owner@warungsehat.id',
+  password: 'SecureLogin123',
   address: 'Jl. Prof. Dr. Soepomo No. 45, Jakarta Selatan',
   lat: -6.2435,
   lng: 106.8444,
-  owner_uid: 'firebaseUidExample456',
 };
 
 export const MERCHANT_CREATE_FOOD_BODY_EXAMPLE = {

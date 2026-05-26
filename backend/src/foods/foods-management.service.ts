@@ -10,8 +10,11 @@ import { FirebaseService } from '../firebase/firebase.service';
 import { UserRole } from '../common/enums/user-role.enum';
 import { CreateFoodDto } from '../admin/dto/create-food.dto';
 import { UpdateFoodDto } from '../admin/dto/update-food.dto';
+import { CreateMerchantScopedFoodDto } from '../admin/dto/create-merchant-scoped-food.dto';
+import { UpdateMerchantScopedFoodDto } from '../admin/dto/update-merchant-scoped-food.dto';
 import { CreateMerchantFoodDto } from '../merchant/dto/create-merchant-food.dto';
 import { UpdateMerchantFoodDto } from '../merchant/dto/update-merchant-food.dto';
+import { ListMerchantFoodsQueryDto } from '../merchant/dto/list-merchant-foods-query.dto';
 import { AiService, NutritionAssessment } from '../ai/ai.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import type { UploadedImageFile } from '../common/types/uploaded-image-file';
@@ -19,6 +22,7 @@ import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 export interface FoodActorContext {
   role: UserRole;
   merchantId?: string;
+  merchantScopeId?: string;
 }
 
 @Injectable()
@@ -34,7 +38,7 @@ export class FoodsManagementService {
   }
 
   async createFood(
-    dto: CreateFoodDto | CreateMerchantFoodDto,
+    dto: CreateFoodDto | CreateMerchantFoodDto | CreateMerchantScopedFoodDto,
     actor: FoodActorContext,
     merchantIdOverride?: string,
   ) {
@@ -64,7 +68,7 @@ export class FoodsManagementService {
 
   async updateFood(
     id: string,
-    dto: UpdateFoodDto | UpdateMerchantFoodDto,
+    dto: UpdateFoodDto | UpdateMerchantFoodDto | UpdateMerchantScopedFoodDto,
     actor: FoodActorContext,
   ) {
     const foodRef = this.db().collection('foods').doc(id);
@@ -158,10 +162,10 @@ export class FoodsManagementService {
 
   async listFoodsForMerchant(
     merchantId: string,
-    page = 1,
-    limit = 20,
-    includeUnavailable = true,
+    query: ListMerchantFoodsQueryDto = {},
   ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const snap = await this.db()
       .collection('foods')
       .where('merchant_id', '==', merchantId)
@@ -177,8 +181,17 @@ export class FoodsManagementService {
       },
     );
 
-    if (!includeUnavailable) {
-      items = items.filter((item) => item.is_available !== false);
+    if (query.is_available !== undefined) {
+      items = items.filter((item) => item.is_available === query.is_available);
+    }
+
+    if (query.q?.trim()) {
+      const term = query.q.trim().toLowerCase();
+      items = items.filter(
+        (item) =>
+          this.matchesText(item.name, term) ||
+          this.matchesText(item.description, term),
+      );
     }
 
     items.sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -196,9 +209,46 @@ export class FoodsManagementService {
     };
   }
 
+  async getFoodForMerchant(id: string, merchantId: string) {
+    const doc = await this.db().collection('foods').doc(id).get();
+    if (!doc.exists) {
+      throw new NotFoundException('Food not found');
+    }
+
+    const food = { ...(doc.data() as Record<string, unknown>) };
+    this.assertFoodOwnership(food, {
+      role: UserRole.MERCHANT,
+      merchantId,
+    });
+    delete food['recipe'];
+    return { id, ...food };
+  }
+
+  async getMerchantDashboard(merchantId: string) {
+    const snap = await this.db()
+      .collection('foods')
+      .where('merchant_id', '==', merchantId)
+      .get();
+    let totalActiveItems = 0;
+    let totalInactiveItems = 0;
+
+    snap.docs.forEach((doc) => {
+      if (doc.data()['is_available'] === true) {
+        totalActiveItems += 1;
+      } else {
+        totalInactiveItems += 1;
+      }
+    });
+
+    return {
+      total_active_items: totalActiveItems,
+      total_inactive_items: totalInactiveItems,
+    };
+  }
+
   private resolveMerchantId(
     actor: FoodActorContext,
-    dto: CreateFoodDto | CreateMerchantFoodDto,
+    dto: CreateFoodDto | CreateMerchantFoodDto | CreateMerchantScopedFoodDto,
     merchantIdOverride?: string,
   ): string {
     if (actor.role === UserRole.MERCHANT) {
@@ -224,7 +274,7 @@ export class FoodsManagementService {
   }
 
   private buildFoodPayload(
-    dto: CreateFoodDto | CreateMerchantFoodDto,
+    dto: CreateFoodDto | CreateMerchantFoodDto | CreateMerchantScopedFoodDto,
     merchantId: string,
     actor: FoodActorContext,
     assessment: NutritionAssessment,
@@ -258,7 +308,7 @@ export class FoodsManagementService {
   }
 
   private buildUpdatePatch(
-    dto: UpdateFoodDto | UpdateMerchantFoodDto,
+    dto: UpdateFoodDto | UpdateMerchantFoodDto | UpdateMerchantScopedFoodDto,
     actor: FoodActorContext,
     assessment?: NutritionAssessment,
   ) {
@@ -310,6 +360,9 @@ export class FoodsManagementService {
     actor: FoodActorContext,
   ) {
     if (actor.role === UserRole.ADMIN) {
+      if (actor.merchantScopeId && food.merchant_id !== actor.merchantScopeId) {
+        throw new ForbiddenException('Food does not belong to this merchant');
+      }
       return;
     }
 
@@ -321,5 +374,9 @@ export class FoodsManagementService {
     }
 
     throw new ForbiddenException('Insufficient permissions');
+  }
+
+  private matchesText(value: unknown, term: string): boolean {
+    return typeof value === 'string' && value.toLowerCase().includes(term);
   }
 }

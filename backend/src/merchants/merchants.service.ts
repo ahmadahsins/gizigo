@@ -15,6 +15,7 @@ export interface CreateMerchantOptions {
   merchantId?: string;
   ownerUid?: string;
   isVerified?: boolean;
+  businessEmail?: string | null;
 }
 
 type StoredMerchant = Record<string, unknown>;
@@ -37,12 +38,12 @@ export class MerchantsService {
       : db.collection('merchants').doc();
 
     const merchantId = merchantRef.id;
-    const ownerUid =
-      options.ownerUid ?? ('owner_uid' in dto ? dto.owner_uid : undefined);
+    const ownerUid = options.ownerUid;
 
     const payload = this.buildMerchantPayload(merchantId, dto, {
       ownerUid,
       isVerified: options.isVerified ?? true,
+      businessEmail: options.businessEmail ?? null,
     });
 
     try {
@@ -59,7 +60,10 @@ export class MerchantsService {
     if (!doc.exists) {
       throw new NotFoundException('Merchant not found');
     }
-    return { id: doc.id, ...this.serializeMerchant(doc.data()!) };
+    const data = doc.data()!;
+    const serialized = this.serializeMerchant(data);
+    const businessEmail = await this.resolveBusinessEmail(data);
+    return { id: doc.id, ...serialized, business_email: businessEmail };
   }
 
   async updateMerchant(merchantId: string, dto: UpdateMerchantDto) {
@@ -75,7 +79,6 @@ export class MerchantsService {
 
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.address !== undefined) patch.address = dto.address;
-    if (dto.owner_uid !== undefined) patch.owner_uid = dto.owner_uid;
     if (dto.is_verified !== undefined) patch.is_verified = dto.is_verified;
     if (dto.is_active !== undefined) patch.is_active = dto.is_active;
 
@@ -148,7 +151,11 @@ export class MerchantsService {
   private buildMerchantPayload(
     merchantId: string,
     dto: CreateMerchantDto | MerchantLocationDto,
-    options: { ownerUid?: string; isVerified: boolean },
+    options: {
+      ownerUid?: string;
+      isVerified: boolean;
+      businessEmail: string | null;
+    },
   ) {
     const now = admin.firestore.FieldValue.serverTimestamp();
     return {
@@ -158,6 +165,7 @@ export class MerchantsService {
       coordinates: new admin.firestore.GeoPoint(dto.lat, dto.lng),
       geohash: geohashForLocation([dto.lat, dto.lng]),
       owner_uid: options.ownerUid ?? null,
+      business_email: options.businessEmail,
       is_verified: options.isVerified,
       is_active: true,
       created_at: now,
@@ -178,6 +186,7 @@ export class MerchantsService {
       lat: coords?.latitude ?? null,
       lng: coords?.longitude ?? null,
       owner_uid: data['owner_uid'] ?? null,
+      business_email: data['business_email'] ?? null,
       is_verified: data['is_verified'] ?? true,
       is_active: data['is_active'] ?? true,
       created_at: this.serializeTs(data['created_at']),
@@ -191,5 +200,22 @@ export class MerchantsService {
       return (ts as FirebaseFirestore.Timestamp).toDate().toISOString();
     }
     return null;
+  }
+
+  private async resolveBusinessEmail(value: unknown): Promise<string | null> {
+    const data = (value ?? {}) as StoredMerchant;
+    if (typeof data['business_email'] === 'string') {
+      return data['business_email'];
+    }
+    const ownerUid = data['owner_uid'];
+    if (typeof ownerUid !== 'string') {
+      return null;
+    }
+    try {
+      const owner = await this.firebaseService.getAuth().getUser(ownerUid);
+      return owner.email ?? null;
+    } catch {
+      return null;
+    }
   }
 }

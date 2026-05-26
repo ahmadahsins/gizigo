@@ -71,6 +71,17 @@ export class MerchantController {
     return this.merchantsService.updateMerchant(req.merchantId, dto);
   }
 
+  @Get('dashboard')
+  @ApiOperation({ summary: 'Get menu counts for the merchant landing page' })
+  @ApiOkResponse({
+    schema: {
+      example: { total_active_items: 16, total_inactive_items: 3 },
+    },
+  })
+  async getDashboard(@Req() req: { merchantId: string }) {
+    return this.foodsManagementService.getMerchantDashboard(req.merchantId);
+  }
+
   @Get('foods')
   @ApiOperation({ summary: 'List foods owned by the logged-in merchant' })
   async listFoods(
@@ -79,9 +90,18 @@ export class MerchantController {
   ) {
     return this.foodsManagementService.listFoodsForMerchant(
       req.merchantId,
-      query.page,
-      query.limit,
+      query,
     );
+  }
+
+  @Get('foods/:id')
+  @ApiOperation({
+    summary: 'Get a food owned by the logged-in merchant',
+    description:
+      'Returns both visible and hidden menu entries for management screens.',
+  })
+  async getFood(@Req() req: { merchantId: string }, @Param('id') id: string) {
+    return this.foodsManagementService.getFoodForMerchant(id, req.merchantId);
   }
 
   @Post('foods')

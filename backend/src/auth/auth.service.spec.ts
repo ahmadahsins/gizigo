@@ -87,6 +87,7 @@ describe('AuthService', () => {
         merchantId: 'uid123',
         ownerUid: 'uid123',
         isVerified: true,
+        businessEmail: 'owner@example.com',
       },
     );
   });

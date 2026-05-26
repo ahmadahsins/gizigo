@@ -112,6 +112,7 @@ export class AuthService {
       merchantId: user.uid,
       ownerUid: user.uid,
       isVerified: true,
+      businessEmail: user.email ?? null,
     });
 
     return {
