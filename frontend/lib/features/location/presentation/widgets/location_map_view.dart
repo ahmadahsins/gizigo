@@ -22,7 +22,8 @@ class LocationMapView extends StatefulWidget {
   const LocationMapView({
     super.key,
     required this.mapController,
-    required this.selectedPlace,
+    required this.initialCenter,
+    required this.initialZoom,
     required this.onMapIdle,
   });
 
@@ -31,7 +32,8 @@ class LocationMapView extends StatefulWidget {
   static const String userAgentPackageName = 'id.gizigo.app';
 
   final MapController mapController;
-  final LocationMapPlace selectedPlace;
+  final LatLng initialCenter;
+  final double initialZoom;
   final ValueChanged<LatLng> onMapIdle;
 
   @override
@@ -56,8 +58,8 @@ class _LocationMapViewState extends State<LocationMapView> {
         FlutterMap(
           mapController: widget.mapController,
           options: MapOptions(
-            initialCenter: widget.selectedPlace.point,
-            initialZoom: 16,
+            initialCenter: widget.initialCenter,
+            initialZoom: widget.initialZoom,
             minZoom: 5,
             maxZoom: 19,
             interactionOptions: const InteractionOptions(
@@ -103,11 +105,15 @@ class _LocationMapViewState extends State<LocationMapView> {
 
     if (event is MapEventFlingAnimationEnd) {
       _isFlinging = false;
-      widget.onMapIdle(event.camera.center);
+      if (_isUserMapEvent(event.source)) {
+        widget.onMapIdle(event.camera.center);
+      }
       return;
     }
 
     if (event is MapEventMoveEnd) {
+      if (!_isUserMapEvent(event.source)) return;
+
       _idleTimer?.cancel();
       _idleTimer = Timer(const Duration(milliseconds: 80), () {
         if (!mounted || _isFlinging) return;
@@ -117,7 +123,18 @@ class _LocationMapViewState extends State<LocationMapView> {
     }
 
     if (event is MapEventDoubleTapZoomEnd) {
-      widget.onMapIdle(event.camera.center);
+      if (_isUserMapEvent(event.source)) {
+        widget.onMapIdle(event.camera.center);
+      }
     }
+  }
+
+  bool _isUserMapEvent(MapEventSource source) {
+    return source == MapEventSource.dragEnd ||
+        source == MapEventSource.multiFingerEnd ||
+        source == MapEventSource.scrollWheel ||
+        source == MapEventSource.doubleTap ||
+        source == MapEventSource.doubleTapZoomAnimationController ||
+        source == MapEventSource.flingAnimationController;
   }
 }

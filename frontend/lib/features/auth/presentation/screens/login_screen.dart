@@ -10,6 +10,7 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../router/app_router.dart';
+import '../../data/auth_role_router.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/google_button.dart';
@@ -65,10 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
         value: idToken,
       );
 
-      await DioClient(storage: _secureStorage).post(ApiConstants.authSync);
-
-      if (!mounted) return;
-      context.goNamed('home');
+      await _syncAuthAndOpenHome();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       _showError(_authErrorMessage(error));
@@ -122,10 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
         key: ApiConstants.firebaseIdTokenStorageKey,
         value: idToken,
       );
-      await DioClient(storage: _secureStorage).post(ApiConstants.authSync);
-
-      if (!mounted) return;
-      context.goNamed('home');
+      await _syncAuthAndOpenHome();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       _showError(_authErrorMessage(error));
@@ -158,6 +153,16 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       _showError('Reset password gagal. Coba lagi.');
     }
+  }
+
+  Future<void> _syncAuthAndOpenHome() async {
+    final routeName = await AuthRoleRouter.routeNameForCurrentUser(
+      client: DioClient(storage: _secureStorage),
+    );
+
+    if (!mounted) return;
+
+    context.goNamed(routeName);
   }
 
   String _authErrorMessage(FirebaseAuthException error) {

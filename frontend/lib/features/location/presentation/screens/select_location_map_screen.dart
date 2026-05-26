@@ -26,17 +26,7 @@ class SelectLocationMapScreen extends StatefulWidget {
 }
 
 class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
-  static const LocationMapPlace _defaultPlace = LocationMapPlace(
-    location: LocationItem(
-      name: 'TILC Building - Main Lobby',
-      address:
-          'Jl. Blimbingsari No.37, Blimbing Sari, Caturtunggal, Depok, Sleman, DI Yogyakarta 55281',
-      distanceLabel: '0.4km',
-      latitude: -7.76892,
-      longitude: 110.37972,
-    ),
-    type: LocationMapPlaceType.selected,
-  );
+  static const LatLng _fallbackMapCenter = LatLng(-2.548926, 118.0148634);
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -44,7 +34,7 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
   final LocationReverseGeocodingService _reverseGeocodingService =
       LocationReverseGeocodingService();
 
-  LocationMapPlace _selectedPlace = _defaultPlace;
+  LocationMapPlace? _selectedPlace;
   CancelToken? _reverseGeocodingCancelToken;
   CancelToken? _searchCancelToken;
   Timer? _searchDebounce;
@@ -57,6 +47,9 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
   bool _showSearchSuggestions = false;
   bool _canApplyInitialCurrentLocation = true;
   bool _isGettingCurrentLocation = false;
+
+  LatLng get _initialMapCenter => _selectedPlace?.point ?? _fallbackMapCenter;
+  double get _initialMapZoom => _selectedPlace == null ? 5 : 16;
 
   bool get _hasSearchText => _searchController.text.trim().isNotEmpty;
   bool get _shouldShowSearchSuggestions {
@@ -104,7 +97,8 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
             Positioned.fill(
               child: LocationMapView(
                 mapController: _mapController,
-                selectedPlace: _selectedPlace,
+                initialCenter: _initialMapCenter,
+                initialZoom: _initialMapZoom,
                 onMapIdle: _handleMapIdle,
               ),
             ),
@@ -141,7 +135,7 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
             Align(
               alignment: Alignment.bottomCenter,
               child: _LocationSelectionSheet(
-                location: _selectedPlace.location,
+                location: _selectedPlace?.location,
                 isResolvingAddress: _isResolvingAddress,
                 onSelect: _confirmSelection,
               ),
@@ -442,8 +436,16 @@ class _SelectLocationMapScreenState extends State<SelectLocationMapScreen> {
   void _confirmSelection() {
     _unfocusSearch();
 
+    final selectedPlace = _selectedPlace;
+    if (selectedPlace == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pilih titik lokasi dulu.')));
+      return;
+    }
+
     if (context.canPop()) {
-      context.pop(_selectedPlace.location);
+      context.pop(selectedPlace.location);
       return;
     }
 
@@ -699,12 +701,14 @@ class _LocationSelectionSheet extends StatelessWidget {
     required this.onSelect,
   });
 
-  final LocationItem location;
+  final LocationItem? location;
   final bool isResolvingAddress;
   final VoidCallback onSelect;
 
   @override
   Widget build(BuildContext context) {
+    final selectedLocation = location;
+
     return Material(
       color: AppColors.surface,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -760,11 +764,12 @@ class _LocationSelectionSheet extends StatelessWidget {
                               ],
                             ),
                           )
-                        : Column(
+                        : selectedLocation == null
+                        ? Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                location.name,
+                                'Belum ada lokasi',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.heading3.copyWith(
@@ -775,7 +780,33 @@ class _LocationSelectionSheet extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                location.address,
+                                'Cari lokasi atau geser map untuk memilih titik merchant.',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  fontSize: 11,
+                                  height: 1.25,
+                                  color: const Color(0xFF555555),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                selectedLocation.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.heading3.copyWith(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF333333),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                selectedLocation.address,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.bodySmall.copyWith(
@@ -794,9 +825,11 @@ class _LocationSelectionSheet extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: onSelect,
+                  onPressed: selectedLocation == null ? null : onSelect,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
+                    disabledBackgroundColor: const Color(0xFFB9B9B9),
+                    disabledForegroundColor: Colors.white,
                     foregroundColor: Colors.white,
                     elevation: 3,
                     shadowColor: Colors.black.withValues(alpha: 0.20),

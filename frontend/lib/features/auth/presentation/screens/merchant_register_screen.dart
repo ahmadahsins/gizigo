@@ -24,14 +24,6 @@ class MerchantRegisterScreen extends StatefulWidget {
 }
 
 class _MerchantRegisterScreenState extends State<MerchantRegisterScreen> {
-  static const _defaultMerchantLocation = _MerchantLocation(
-    name: 'Nasi Goreng Den Bagoes',
-    address:
-        'Jl. Blimbingan No.37, Blimbing Sari, Caturtunggal, Depok, Sleman, DI Yogyakarta 55281',
-    latitude: -7.76892,
-    longitude: 110.38298,
-  );
-
   final _formKey = GlobalKey<FormState>();
   final _businessNameController = TextEditingController();
   final _businessEmailController = TextEditingController();
@@ -43,21 +35,18 @@ class _MerchantRegisterScreenState extends State<MerchantRegisterScreen> {
   bool _isLoading = false;
   LocationItem? _selectedMerchantLocation;
 
-  _MerchantLocation get _merchantLocationPreview {
+  _MerchantLocation? get _merchantLocationPreview {
     final selectedLocation = _selectedMerchantLocation;
+    if (selectedLocation == null) return null;
+
     final businessName = _businessNameController.text.trim();
     final address = _addressController.text.trim();
 
     return _MerchantLocation(
-      name: businessName.isNotEmpty
-          ? businessName
-          : selectedLocation?.name ?? _defaultMerchantLocation.name,
-      address: address.isNotEmpty
-          ? address
-          : selectedLocation?.address ?? _defaultMerchantLocation.address,
-      latitude: selectedLocation?.latitude ?? _defaultMerchantLocation.latitude,
-      longitude:
-          selectedLocation?.longitude ?? _defaultMerchantLocation.longitude,
+      name: businessName.isNotEmpty ? businessName : selectedLocation.name,
+      address: address.isNotEmpty ? address : selectedLocation.address,
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
     );
   }
 
@@ -123,7 +112,7 @@ class _MerchantRegisterScreenState extends State<MerchantRegisterScreen> {
       );
 
       if (!mounted) return;
-      context.goNamed(AppRouter.home);
+      context.goNamed(AppRouter.merchantHome);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       _showError(_authErrorMessage(error));
@@ -362,12 +351,14 @@ class _MerchantLocationPreview extends StatelessWidget {
   static const _osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   static const _userAgentPackageName = 'id.gizigo.app';
 
-  final _MerchantLocation location;
+  final _MerchantLocation? location;
   final bool hasSelectedLocation;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final selectedLocation = location;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -393,41 +384,43 @@ class _MerchantLocationPreview extends StatelessWidget {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: AbsorbPointer(
-                        child: FlutterMap(
-                          key: ValueKey(
-                            '${location.latitude},${location.longitude}',
-                          ),
-                          options: MapOptions(
-                            initialCenter: location.point,
-                            initialZoom: 16,
-                            interactionOptions: const InteractionOptions(
-                              flags: InteractiveFlag.none,
-                            ),
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate: _osmTileUrl,
-                              userAgentPackageName: _userAgentPackageName,
-                              maxNativeZoom: 19,
-                            ),
-                            MarkerLayer(
-                              markers: [
-                                Marker(
-                                  point: location.point,
-                                  width: 56,
-                                  height: 56,
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    color: AppColors.primary,
-                                    size: 56,
+                      child: selectedLocation == null
+                          ? const _EmptyMerchantLocationPreview()
+                          : AbsorbPointer(
+                              child: FlutterMap(
+                                key: ValueKey(
+                                  '${selectedLocation.latitude},${selectedLocation.longitude}',
+                                ),
+                                options: MapOptions(
+                                  initialCenter: selectedLocation.point,
+                                  initialZoom: 16,
+                                  interactionOptions: const InteractionOptions(
+                                    flags: InteractiveFlag.none,
                                   ),
                                 ),
-                              ],
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: _osmTileUrl,
+                                    userAgentPackageName: _userAgentPackageName,
+                                    maxNativeZoom: 19,
+                                  ),
+                                  MarkerLayer(
+                                    markers: [
+                                      Marker(
+                                        point: selectedLocation.point,
+                                        width: 56,
+                                        height: 56,
+                                        child: const Icon(
+                                          Icons.location_on,
+                                          color: AppColors.primary,
+                                          size: 56,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                      ),
                     ),
                     Positioned(
                       top: 12,
@@ -481,7 +474,7 @@ class _MerchantLocationPreview extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            location.name,
+                            selectedLocation?.name ?? 'Lokasi belum dipilih',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
@@ -492,7 +485,8 @@ class _MerchantLocationPreview extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            location.address,
+                            selectedLocation?.address ??
+                                'Tap untuk memilih titik lokasi merchant.',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
@@ -510,6 +504,46 @@ class _MerchantLocationPreview extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyMerchantLocationPreview extends StatelessWidget {
+  const _EmptyMerchantLocationPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xFFEDEAEA)),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Icon(
+                Icons.add_location_alt_rounded,
+                color: AppColors.primary,
+                size: 30,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Pilih lokasi merchant',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF3A3A3A),
+              ),
+            ),
+          ],
         ),
       ),
     );
