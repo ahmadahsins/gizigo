@@ -200,9 +200,11 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 
 | Method | Path                        | Keterangan                                                                                             |
 | :----- | :-------------------------- | :----------------------------------------------------------------------------------------------------- |
-| GET    | `/merchant/me`              | Profil toko merchant login                                                                             |
+| GET    | `/merchant/me`              | Profil toko merchant login termasuk `business_email`                                                   |
 | PATCH  | `/merchant/me`              | Update nama, alamat, koordinat                                                                         |
-| GET    | `/merchant/foods`           | Daftar menu milik merchant                                                                             |
+| GET    | `/merchant/dashboard`       | Kartu landing merchant: `{ total_active_items, total_inactive_items }`                                 |
+| GET    | `/merchant/foods`           | Daftar menu milik merchant; query `q`, `is_available`, `page`, `limit`                                 |
+| GET    | `/merchant/foods/:id`       | Detail menu milik merchant untuk management, termasuk menu hidden                                      |
 | POST   | `/merchant/foods`           | Buat menu tanpa file foto; wajib resep request-only, gizi dibuat Gemini, grade di bawah `GOOD` ditolak |
 | PUT    | `/merchant/foods/:id`       | Update metadata menu milik sendiri; kirim resep hanya untuk analisis gizi ulang                        |
 | POST   | `/merchant/foods/:id/photo` | Multipart field `file`; upload/replace foto menu milik sendiri ke Cloudinary dan menyimpan `photo_url` |
@@ -334,6 +336,10 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
     - Bila create sukses, ambil `id` dari response lalu upload file terpilih menggunakan `POST /merchant/foods/{id}/photo` atau `POST /admin/merchants/{merchantId}/foods/{id}/photo` sebagai `multipart/form-data` field `file`.
     - Bila create ditolak Gemini, tampilkan alasan penolakan dan jangan menjalankan upload foto.
     - Saat mengganti foto pada menu yang sudah ada, panggil endpoint `/photo` secara langsung; tidak perlu mengirim ulang resep.
+13. **Landing dan profil merchant:**
+    - `GET /merchant/dashboard` mengisi kartu jumlah menu aktif/nonaktif.
+    - `GET /merchant/foods?q=&is_available=` mengisi list dan tab status; tombol detail membuka `GET /merchant/foods/{id}` sehingga menu hidden tetap dapat diedit.
+    - `GET /merchant/me` menampilkan nama bisnis, `business_email`, alamat, dan koordinat. Edit profil merchant hanya mengubah identitas/lokasi bisnis; perubahan email login dikelola admin.
 
 ### D. Pemetaan layar UI → endpoint
 
@@ -347,7 +353,9 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 | Recently viewed        | `GET /users/me/recently-viewed`                                                                     |
 | Select location        | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Places di Flutter)           |
 | Profil                 | `GET /users/me`, `PATCH /users/me`, `POST /users/me/photo`                                          |
-| Kelola menu merchant   | `POST /merchant/foods`, `PUT /merchant/foods/:id`, `POST /merchant/foods/:id/photo`                 |
+| Landing merchant       | `GET /merchant/dashboard`, `GET /merchant/foods?q=&is_available=`                                   |
+| Profil merchant        | `GET /merchant/me`, `PATCH /merchant/me`                                                            |
+| Kelola menu merchant   | `GET/POST /merchant/foods`, `GET/PUT/DELETE /merchant/foods/:id`, `POST /merchant/foods/:id/photo`  |
 | Landing admin          | `GET /admin/dashboard`, `GET /admin/merchants?q=&is_active=`                                        |
 | Detail merchant admin  | `POST /admin/merchants`, `GET/PUT/DELETE /admin/merchants/:id`                                      |
 | Kelola menu admin      | `GET/POST /admin/merchants/:merchantId/foods`, `PUT/POST .../:foodId[/photo]`, `DELETE .../:foodId` |

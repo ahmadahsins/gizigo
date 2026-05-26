@@ -46,6 +46,23 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
   meranking menu tersedia. Bila AI tidak tersedia, endpoint menggunakan
   ranking lokal dan mengembalikan `context.recommendation_source: "fallback"`.
 
+## Merchant Menu Management
+
+- `GET /merchant/me` mengembalikan business profile termasuk
+  `business_email`; email ditampilkan pada profil tetapi tidak diubah melalui
+  endpoint profil merchant.
+- `GET /merchant/dashboard` mengembalikan jumlah menu aktif dan nonaktif untuk
+  kartu landing page merchant.
+- `GET /merchant/foods?q=&is_available=&page=&limit=` mendukung pencarian dan
+  tab All / Active / Inactive. `GET /merchant/foods/:id` menampilkan detail
+  menu sendiri, termasuk menu yang sedang hidden.
+- `POST /merchant/foods` mengikat menu otomatis ke merchant yang login; Flutter
+  tidak mengirim `merchant_id`. Request wajib memuat `recipe`, lalu foto
+  dikirim terpisah ke `POST /merchant/foods/:id/photo` setelah menu lolos
+  analisis.
+- `PUT /merchant/foods/:id` dapat mengubah metadata atau toggle
+  `is_available`; Gemini hanya dipanggil kembali bila `recipe` baru dikirim.
+
 ## Admin Merchant Management
 
 - `GET /admin/dashboard` menyediakan total merchant dan jumlah menu
@@ -85,6 +102,10 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
 | `GET`   | `/foods/recommendations`                           | Bearer   | Rekomendasi home                  |
 | `PATCH` | `/users/me`                                        | Bearer   | Update profil                     |
 | `POST`  | `/users/me/photo`                                  | Bearer   | Upload foto profil ke Cloudinary  |
+| `GET`   | `/merchant/me`                                     | Merchant | Profil bisnis merchant            |
+| `GET`   | `/merchant/dashboard`                              | Merchant | Statistik menu merchant           |
+| `GET`   | `/merchant/foods`                                  | Merchant | Search/filter menu sendiri        |
+| `POST`  | `/merchant/foods`                                  | Merchant | Buat menu dengan analisis Gemini  |
 | `POST`  | `/merchant/foods/:id/photo`                        | Merchant | Upload foto menu milik sendiri    |
 | `GET`   | `/admin/dashboard`                                 | Admin    | Statistik landing admin           |
 | `POST`  | `/admin/merchants`                                 | Admin    | Buat akun dan toko merchant       |

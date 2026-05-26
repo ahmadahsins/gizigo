@@ -209,6 +209,43 @@ export class FoodsManagementService {
     };
   }
 
+  async getFoodForMerchant(id: string, merchantId: string) {
+    const doc = await this.db().collection('foods').doc(id).get();
+    if (!doc.exists) {
+      throw new NotFoundException('Food not found');
+    }
+
+    const food = { ...(doc.data() as Record<string, unknown>) };
+    this.assertFoodOwnership(food, {
+      role: UserRole.MERCHANT,
+      merchantId,
+    });
+    delete food['recipe'];
+    return { id, ...food };
+  }
+
+  async getMerchantDashboard(merchantId: string) {
+    const snap = await this.db()
+      .collection('foods')
+      .where('merchant_id', '==', merchantId)
+      .get();
+    let totalActiveItems = 0;
+    let totalInactiveItems = 0;
+
+    snap.docs.forEach((doc) => {
+      if (doc.data()['is_available'] === true) {
+        totalActiveItems += 1;
+      } else {
+        totalInactiveItems += 1;
+      }
+    });
+
+    return {
+      total_active_items: totalActiveItems,
+      total_inactive_items: totalInactiveItems,
+    };
+  }
+
   private resolveMerchantId(
     actor: FoodActorContext,
     dto: CreateFoodDto | CreateMerchantFoodDto | CreateMerchantScopedFoodDto,
