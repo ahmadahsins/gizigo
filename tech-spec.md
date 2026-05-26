@@ -55,6 +55,11 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 - `created_at`: timestamp
 - `updated_at`: timestamp (server)
 
+Untuk merchant yang dibuat admin, dokumen `users/{uid}` menggunakan
+`role: "merchant"`, `merchant_id` yang menunjuk dokumen toko,
+`onboarding_completed: true`, dan `food_preferences: []`. Credential password
+selalu berada di Firebase Auth dan tidak pernah menjadi field Firestore.
+
 ### B. Subcollections under `users/{uid}`
 
 **`recently_viewed/{food_id}`** (ID dokumen = ID dokumen food di koleksi `foods`)
@@ -97,12 +102,17 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 
 - `merchant_id`: string (Primary Key konsisten dengan referensi di `foods`)
 - `owner_uid`: string (opsional; Firebase Auth UID pemilik akun merchant)
+- `business_email`: string | null (email login/display admin; disinkronkan dengan Firebase Auth)
 - `name`: string (nama warung / vendor untuk UI)
 - `address`: string
 - `coordinates`: GeoPoint
 - `geohash`: string (opsional; optimasi radius)
 - `is_verified`: boolean
 - `is_active`: boolean (default `true`; soft delete set `false`)
+
+Merchant buatan admin menggunakan UID akun Firebase Auth sebagai
+`merchant_id`, `owner_uid`, sekaligus ID dokumen merchant. Password tidak
+pernah disimpan, dicatat pada log, ataupun dikembalikan melalui API.
 
 ### E. Catatan query backend
 
@@ -200,18 +210,20 @@ Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price
 
 ### 5.6 Admin (Bearer + role `admin`)
 
-| Method | Path                         | Keterangan                                                                                               |
-| :----- | :--------------------------- | :------------------------------------------------------------------------------------------------------- |
-| GET    | `/admin/merchants`           | List merchant (filter `is_active` opsional)                                                              |
-| GET    | `/admin/merchants/:id`       | Detail merchant                                                                                          |
-| POST   | `/admin/merchants`           | Buat merchant                                                                                            |
-| PUT    | `/admin/merchants/:id`       | Update merchant                                                                                          |
-| DELETE | `/admin/merchants/:id`       | Soft delete merchant (`is_active: false`)                                                                |
-| GET    | `/admin/merchants/:id/foods` | List foods per merchant                                                                                  |
-| POST   | `/admin/foods`               | Buat dokumen `foods` tanpa file foto; wajib `food_category` dan resep request-only untuk analisis Gemini |
-| PUT    | `/admin/foods/:id`           | Partial update                                                                                           |
-| POST   | `/admin/foods/:id/photo`     | Multipart field `file`; upload/replace foto menu ke Cloudinary dan menyimpan `photo_url`                 |
-| DELETE | `/admin/foods/:id`           | Soft delete (`is_available: false`)                                                                      |
+| Method          | Path                                               | Keterangan                                                                          |
+| :-------------- | :------------------------------------------------- | :---------------------------------------------------------------------------------- |
+| GET             | `/admin/dashboard`                                 | Kartu statistik: total merchant, menu aktif, dan menu nonaktif                      |
+| GET             | `/admin/merchants`                                 | List merchant; query `q`, `is_active`, `page`, `limit`                              |
+| GET             | `/admin/merchants/:id`                             | Detail merchant termasuk `business_email`, tanpa password                           |
+| POST            | `/admin/merchants`                                 | Buat toko sekaligus akun Auth merchant (`business_email`, `password`)               |
+| PUT             | `/admin/merchants/:id`                             | Update metadata/email/password baru/status aktif dan sinkronkan Firebase Auth       |
+| DELETE          | `/admin/merchants/:id`                             | Soft delete merchant serta disable akun Auth                                        |
+| GET             | `/admin/merchants/:merchantId/foods`               | List/search/tab menu canonical untuk merchant tertentu                              |
+| POST            | `/admin/merchants/:merchantId/foods`               | Buat menu canonical tanpa `merchant_id`; resep dianalisis Gemini dan tidak disimpan |
+| PUT             | `/admin/merchants/:merchantId/foods/:foodId`       | Edit/toggle menu; recipe opsional untuk analisis ulang                              |
+| POST            | `/admin/merchants/:merchantId/foods/:foodId/photo` | Upload/replace foto menu Cloudinary                                                 |
+| DELETE          | `/admin/merchants/:merchantId/foods/:foodId`       | Soft delete menu merchant tersebut                                                  |
+| POST/PUT/DELETE | `/admin/foods...`                                  | Endpoint global legacy untuk kompatibilitas client lama                             |
 
 ---
 
@@ -241,15 +253,15 @@ Dimana:
 
 ### C. Rekomendasi personal (`GET /foods/recommendations`)
 
-Gemini meranking kandidat menu aktif dengan profil tubuh dan preferensi pengguna, termasuk restrictions serta taste profile. Slot **featured** tetap mengutamakan `is_featured` pada urutan hasil. Scoring lokal lama (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source`.
+Gemini meranking kandidat menu aktif dari merchant aktif dengan profil tubuh dan preferensi pengguna, termasuk restrictions serta taste profile. Slot **featured** tetap mengutamakan `is_featured` pada urutan hasil. Scoring lokal lama (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source`. Menu merchant dengan `is_active: false` tidak tampil pada list, rekomendasi, maupun detail customer tanpa mengubah status `foods.is_available`.
 
 ### D. Upload foto menu (Cloudinary)
 
 Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload dilakukan melalui request terpisah setelah create menu berhasil. Pemisahan ini mencegah aset Cloudinary tidak terpakai apabila Gemini menolak resep dengan grade di bawah `GOOD`.
 
-1.  Flutter mengirim metadata + `recipe` ke `POST /merchant/foods` atau `POST /admin/foods`; file gambar belum dikirim.
+1.  Flutter mengirim metadata + `recipe` ke `POST /merchant/foods` atau `POST /admin/merchants/{merchantId}/foods`; file gambar belum dikirim.
 2.  Backend menganalisis resep. Jika ditolak (`422`) atau layanan analisis gagal (`503`), dokumen menu dan aset gambar tidak dibuat.
-3.  Setelah create sukses dan menghasilkan `id`, Flutter mengirim file yang sudah dipilih ke `POST /merchant/foods/:id/photo` atau `POST /admin/foods/:id/photo`.
+3.  Setelah create sukses dan menghasilkan `id`, Flutter mengirim file yang sudah dipilih ke `POST /merchant/foods/:id/photo` atau `POST /admin/merchants/{merchantId}/foods/{id}/photo`.
 4.  Backend memverifikasi role dan, untuk merchant, ownership menu; kemudian meng-upload atau mengganti aset Cloudinary dan menyimpan URL aman ke `foods.photo_url`.
 5.  Mengganti foto menu tidak memicu analisis gizi ulang. Analisis ulang hanya terjadi saat `recipe` baru dikirim melalui update menu.
 
@@ -318,25 +330,27 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 11. **Profil:** `GET /users/me` / `PATCH /users/me` untuk data akun + onboarding; `POST /users/me/photo` (`multipart/form-data`, JPEG/PNG/WebP maks. 5 MB) untuk mengganti foto profil.
 12. **Tambah / edit menu merchant atau admin:**
     - User dapat memilih foto dan mengisi metadata maupun resep dalam satu form; urutan pengisian pada UI tidak dibatasi.
-    - Saat submit menu baru, kirim metadata + `recipe` terlebih dahulu ke `POST /merchant/foods` atau `POST /admin/foods`, tanpa mengirim `photo_url` maupun binary foto.
-    - Bila create sukses, ambil `id` dari response lalu upload file terpilih menggunakan `POST /merchant/foods/{id}/photo` atau `POST /admin/foods/{id}/photo` sebagai `multipart/form-data` field `file`.
+    - Saat submit menu baru, kirim metadata + `recipe` terlebih dahulu ke `POST /merchant/foods` atau `POST /admin/merchants/{merchantId}/foods`, tanpa mengirim `photo_url` maupun binary foto.
+    - Bila create sukses, ambil `id` dari response lalu upload file terpilih menggunakan `POST /merchant/foods/{id}/photo` atau `POST /admin/merchants/{merchantId}/foods/{id}/photo` sebagai `multipart/form-data` field `file`.
     - Bila create ditolak Gemini, tampilkan alasan penolakan dan jangan menjalankan upload foto.
     - Saat mengganti foto pada menu yang sudah ada, panggil endpoint `/photo` secara langsung; tidak perlu mengirim ulang resep.
 
 ### D. Pemetaan layar UI → endpoint
 
-| Layar                  | Endpoint utama                                                                            |
-| :--------------------- | :---------------------------------------------------------------------------------------- |
-| Login / Sign up (sync) | `POST /auth/sync`, `POST /auth/signup`                                                    |
-| Onboarding wizard      | `GET /meta/nutrition-goals`, `PATCH /users/me`                                            |
-| Home (personalized)    | `GET /foods/recommendations`, `GET /meta/food-categories`, `GET /foods` (filter/kategori) |
-| Search                 | `GET /foods/search`                                                                       |
-| Detail menu            | `GET /foods/:id`, `POST /users/me/recently-viewed`                                        |
-| Recently viewed        | `GET /users/me/recently-viewed`                                                           |
-| Select location        | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Places di Flutter) |
-| Profil                 | `GET /users/me`, `PATCH /users/me`, `POST /users/me/photo`                                |
-| Kelola menu merchant   | `POST /merchant/foods`, `PUT /merchant/foods/:id`, `POST /merchant/foods/:id/photo`       |
-| Kelola menu admin      | `POST /admin/foods`, `PUT /admin/foods/:id`, `POST /admin/foods/:id/photo`                |
+| Layar                  | Endpoint utama                                                                                      |
+| :--------------------- | :-------------------------------------------------------------------------------------------------- |
+| Login / Sign up (sync) | `POST /auth/sync`, `POST /auth/signup`                                                              |
+| Onboarding wizard      | `GET /meta/nutrition-goals`, `PATCH /users/me`                                                      |
+| Home (personalized)    | `GET /foods/recommendations`, `GET /meta/food-categories`, `GET /foods` (filter/kategori)           |
+| Search                 | `GET /foods/search`                                                                                 |
+| Detail menu            | `GET /foods/:id`, `POST /users/me/recently-viewed`                                                  |
+| Recently viewed        | `GET /users/me/recently-viewed`                                                                     |
+| Select location        | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Places di Flutter)           |
+| Profil                 | `GET /users/me`, `PATCH /users/me`, `POST /users/me/photo`                                          |
+| Kelola menu merchant   | `POST /merchant/foods`, `PUT /merchant/foods/:id`, `POST /merchant/foods/:id/photo`                 |
+| Landing admin          | `GET /admin/dashboard`, `GET /admin/merchants?q=&is_active=`                                        |
+| Detail merchant admin  | `POST /admin/merchants`, `GET/PUT/DELETE /admin/merchants/:id`                                      |
+| Kelola menu admin      | `GET/POST /admin/merchants/:merchantId/foods`, `PUT/POST .../:foodId[/photo]`, `DELETE .../:foodId` |
 
 ### E. Contoh payload
 

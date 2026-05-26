@@ -53,6 +53,10 @@ export class FoodsService {
 
     const merchantsMap = await this.loadMerchantsMap(db, foods);
 
+    foods = foods.filter((food) =>
+      this.isFoodFromVisibleMerchant(food, merchantsMap),
+    );
+
     foods = foods.map((food) => {
       const mid = food['merchant_id'] as string | undefined;
       const merchantDoc = mid ? merchantsMap[mid] : undefined;
@@ -191,6 +195,9 @@ export class FoodsService {
     ]);
     const mid = this.optionalString(safeFoodData['merchant_id']);
     const merchantDoc = mid ? merchantsMap[mid] : undefined;
+    if (merchantDoc?.['is_active'] === false) {
+      throw new NotFoundException('Food not found');
+    }
     const vendor_name = this.stringOrNull(merchantDoc?.['name']);
 
     delete safeFoodData['recipe'];
@@ -223,6 +230,10 @@ export class FoodsService {
     );
 
     const merchantsMap = await this.loadMerchantsMap(db, foods);
+
+    foods = foods.filter((food) =>
+      this.isFoodFromVisibleMerchant(food, merchantsMap),
+    );
 
     const center: [number, number] | null =
       query.lat !== undefined &&
@@ -554,6 +565,14 @@ export class FoodsService {
 
   private matchesText(value: unknown, term: string): boolean {
     return typeof value === 'string' && value.toLowerCase().includes(term);
+  }
+
+  private isFoodFromVisibleMerchant(
+    food: Record<string, unknown>,
+    merchantsMap: Record<string, StoredRecord>,
+  ): boolean {
+    const merchantId = this.optionalString(food['merchant_id']);
+    return !merchantId || merchantsMap[merchantId]?.['is_active'] !== false;
   }
 
   private readGeoPoint(value: unknown): FirebaseFirestore.GeoPoint | undefined {

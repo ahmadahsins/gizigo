@@ -198,6 +198,22 @@ describe('FoodsManagementService', () => {
     );
   });
 
+  it('blocks a scoped admin update for food owned by another merchant', async () => {
+    foodRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ merchant_id: 'merchant_b' }),
+    });
+
+    await expect(
+      service.updateFood(
+        'food1',
+        { base_price: 18000 },
+        { role: UserRole.ADMIN, merchantScopeId: 'merchant_a' },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(foodRef.update).not.toHaveBeenCalled();
+  });
+
   it('reanalyzes an updated recipe but does not persist it', async () => {
     foodRef.get.mockResolvedValue({
       exists: true,
@@ -309,5 +325,39 @@ describe('FoodsManagementService', () => {
 
     expect(result.items).toHaveLength(1);
     expect(result.items[0].merchant_id).toBe('merchant_a');
+  });
+
+  it('filters merchant foods for admin search and active tabs', async () => {
+    foodsCollection.where.mockReturnValue({
+      get: jest.fn().mockResolvedValue({
+        docs: [
+          {
+            id: 'food1',
+            data: () => ({
+              name: 'Ayam sehat',
+              description: 'Protein',
+              merchant_id: 'merchant_a',
+              is_available: true,
+            }),
+          },
+          {
+            id: 'food2',
+            data: () => ({
+              name: 'Sup',
+              description: 'Warm',
+              merchant_id: 'merchant_a',
+              is_available: false,
+            }),
+          },
+        ],
+      }),
+    });
+
+    const result = await service.listFoodsForMerchant('merchant_a', {
+      q: 'ayam',
+      is_available: true,
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual(['food1']);
   });
 });

@@ -1,12 +1,17 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, MinLength } from 'class-validator';
 import { MerchantLocationDto } from './merchant-location.dto';
 
 export class CreateMerchantDto extends MerchantLocationDto {
-  @ApiPropertyOptional({
-    description: 'Firebase Auth UID of the merchant owner (admin create only)',
+  @ApiProperty({ example: 'owner@warungsehat.id' })
+  @IsEmail()
+  business_email!: string;
+
+  @ApiProperty({
+    minLength: 6,
+    description: 'Credential for Firebase Auth. Never persisted or returned.',
   })
-  @IsOptional()
   @IsString()
-  owner_uid?: string;
+  @MinLength(6)
+  password!: string;
 }

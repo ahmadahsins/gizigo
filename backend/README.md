@@ -27,7 +27,9 @@ Set `GEMINI_API_KEY` untuk mengaktifkan analisis gizi menu dan rekomendasi
 personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
 `GEMINI_TIMEOUT_MS` default-nya `10000`.
 
-- `POST /merchant/foods` dan `POST /admin/foods` menerima `recipe` berisi
+- `POST /merchant/foods`, endpoint canonical
+  `POST /admin/merchants/:merchantId/foods`, dan endpoint legacy
+  `POST /admin/foods` menerima `recipe` berisi
   `servings` serta bahan dengan unit `pcs`, `g`, `ml`, `l`, `tsp`, `tbsp`,
   `cup`, atau `slice`.
 - `recipe` hanya dipakai selama request analisis. Backend tidak menyimpannya
@@ -37,11 +39,29 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
 - `PUT .../foods/:id` hanya menjalankan analisis ulang bila request membawa
   `recipe`; perubahan metadata tidak mengubah hasil gizi.
 - Foto tidak dikirim pada create menu. Setelah create sukses, unggah gambar
-  melalui `POST /merchant/foods/:id/photo` atau `POST /admin/foods/:id/photo`;
+  melalui `POST /merchant/foods/:id/photo` atau endpoint admin canonical
+  `POST /admin/merchants/:merchantId/foods/:foodId/photo`;
   backend menyimpan URL Cloudinary pada `photo_url`.
 - `GET /foods/recommendations` memakai data profil dan preferensi untuk
   meranking menu tersedia. Bila AI tidak tersedia, endpoint menggunakan
   ranking lokal dan mengembalikan `context.recommendation_source: "fallback"`.
+
+## Admin Merchant Management
+
+- `GET /admin/dashboard` menyediakan total merchant dan jumlah menu
+  aktif/nonaktif untuk landing page admin.
+- `GET /admin/merchants?q=&is_active=&page=&limit=` mendukung pencarian nama,
+  alamat, atau business email.
+- `POST /admin/merchants` menerima `name`, `business_email`, `password`,
+  `address`, `lat`, dan `lng`. Backend membuat akun Firebase Auth serta
+  dokumen merchant/user yang terhubung. Password tidak pernah disimpan di
+  Firestore atau dikembalikan pada response.
+- Menonaktifkan atau menghapus merchant akan men-disable akun login dan
+  menyembunyikan menu merchant tersebut dari endpoint customer. Reactivation
+  mengaktifkan akun dan menampilkan kembali menu yang masih available.
+- UI admin baru harus memakai route menu bersarang
+  `/admin/merchants/:merchantId/foods`; route global `/admin/foods` tetap ada
+  hanya untuk client lama.
 
 ## Scripts
 
@@ -56,18 +76,22 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
 
 ## API Routes
 
-| Method  | Path                        | Auth     | Keterangan                        |
-| ------- | --------------------------- | -------- | --------------------------------- |
-| `GET`   | `/`                         | —        | Health check                      |
-| `GET`   | `/meta/*`                   | —        | Metadata publik                   |
-| `POST`  | `/auth/signup`              | Bearer   | Sync user setelah Firebase signup |
-| `GET`   | `/foods`                    | Bearer   | Daftar & search makanan           |
-| `GET`   | `/foods/recommendations`    | Bearer   | Rekomendasi home                  |
-| `PATCH` | `/users/me`                 | Bearer   | Update profil                     |
-| `POST`  | `/users/me/photo`           | Bearer   | Upload foto profil ke Cloudinary  |
-| `POST`  | `/merchant/foods/:id/photo` | Merchant | Upload foto menu milik sendiri    |
-| `POST`  | `/admin/foods/:id/photo`    | Admin    | Upload foto menu                  |
-| `GET`   | `/api`                      | —        | Swagger UI                        |
+| Method  | Path                                               | Auth     | Keterangan                        |
+| ------- | -------------------------------------------------- | -------- | --------------------------------- |
+| `GET`   | `/`                                                | —        | Health check                      |
+| `GET`   | `/meta/*`                                          | —        | Metadata publik                   |
+| `POST`  | `/auth/signup`                                     | Bearer   | Sync user setelah Firebase signup |
+| `GET`   | `/foods`                                           | Bearer   | Daftar & search makanan           |
+| `GET`   | `/foods/recommendations`                           | Bearer   | Rekomendasi home                  |
+| `PATCH` | `/users/me`                                        | Bearer   | Update profil                     |
+| `POST`  | `/users/me/photo`                                  | Bearer   | Upload foto profil ke Cloudinary  |
+| `POST`  | `/merchant/foods/:id/photo`                        | Merchant | Upload foto menu milik sendiri    |
+| `GET`   | `/admin/dashboard`                                 | Admin    | Statistik landing admin           |
+| `POST`  | `/admin/merchants`                                 | Admin    | Buat akun dan toko merchant       |
+| `POST`  | `/admin/merchants/:merchantId/foods`               | Admin    | Buat menu merchant                |
+| `POST`  | `/admin/merchants/:merchantId/foods/:foodId/photo` | Admin    | Upload foto menu                  |
+| `POST`  | `/admin/foods/:id/photo`                           | Admin    | Upload foto menu legacy           |
+| `GET`   | `/api`                                             | —        | Swagger UI                        |
 
 ---
 
@@ -184,6 +208,8 @@ aset Cloudinary user sebelumnya.
 
 Create menu tidak menerima `photo_url`. Setelah endpoint create mengembalikan
 `id`, kirim `multipart/form-data` dengan field `file` ke
-`POST /merchant/foods/:id/photo` atau `POST /admin/foods/:id/photo`. File yang
+`POST /merchant/foods/:id/photo` atau
+`POST /admin/merchants/:merchantId/foods/:foodId/photo`. Route
+`POST /admin/foods/:id/photo` tetap tersedia sebagai kompatibilitas legacy. File yang
 diterima adalah JPEG, PNG, atau WebP hingga 5 MB; URL hasil Cloudinary disimpan
 backend ke `photo_url`. Upload foto tidak menjalankan analisis gizi ulang.

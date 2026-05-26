@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { FoodsService } from './foods.service';
 
 describe('FoodsService recommendations', () => {
@@ -20,7 +21,11 @@ describe('FoodsService recommendations', () => {
     },
   ];
 
-  function setup(user: Record<string, unknown>) {
+  function setup(
+    user: Record<string, unknown>,
+    foods = foodDocs,
+    merchants: Array<{ id: string; data: () => Record<string, unknown> }> = [],
+  ) {
     const rankFoodsForUser = jest.fn().mockResolvedValue(['food2', 'food1']);
     const firebaseService = {
       getFirestore: jest.fn().mockReturnValue({
@@ -35,7 +40,20 @@ describe('FoodsService recommendations', () => {
           if (name === 'foods') {
             return {
               where: jest.fn().mockReturnValue({
-                get: jest.fn().mockResolvedValue({ docs: foodDocs }),
+                get: jest.fn().mockResolvedValue({ docs: foods }),
+              }),
+            };
+          }
+          if (name === 'merchants') {
+            return {
+              where: jest.fn().mockReturnValue({
+                get: jest.fn().mockResolvedValue({
+                  forEach: (
+                    callback: (doc: {
+                      data: () => Record<string, unknown>;
+                    }) => void,
+                  ) => merchants.forEach(callback),
+                }),
               }),
             };
           }
@@ -97,5 +115,89 @@ describe('FoodsService recommendations', () => {
 
     expect(rankFoodsForUser).not.toHaveBeenCalled();
     expect(response.context.recommendation_source).toBe('fallback');
+  });
+
+  it('does not recommend foods from inactive merchants', async () => {
+    const { service } = setup(
+      {},
+      [
+        {
+          id: 'food1',
+          data: () => ({
+            name: 'Visible',
+            merchant_id: 'active',
+            is_available: true,
+            nutrition_grade: 'GOOD',
+          }),
+        },
+        {
+          id: 'food2',
+          data: () => ({
+            name: 'Hidden',
+            merchant_id: 'closed',
+            is_available: true,
+            nutrition_grade: 'EXCELLENT',
+          }),
+        },
+      ],
+      [
+        {
+          id: 'active',
+          data: () => ({ merchant_id: 'active', is_active: true }),
+        },
+        {
+          id: 'closed',
+          data: () => ({ merchant_id: 'closed', is_active: false }),
+        },
+      ],
+    );
+
+    const response = await service.getRecommendations('user1', {
+      featured_limit: 0,
+      limit: 2,
+    });
+
+    expect(response.recommendations.map((food) => food.id)).toEqual(['food1']);
+  });
+
+  it('returns not found for customer detail owned by an inactive merchant', async () => {
+    const service = new FoodsService(
+      {
+        getFirestore: jest.fn().mockReturnValue({
+          collection: jest.fn((name: string) => {
+            if (name === 'foods') {
+              return {
+                doc: jest.fn().mockReturnValue({
+                  get: jest.fn().mockResolvedValue({
+                    exists: true,
+                    id: 'food1',
+                    data: () => ({ merchant_id: 'closed', name: 'Hidden' }),
+                  }),
+                }),
+              };
+            }
+            return {
+              where: jest.fn().mockReturnValue({
+                get: jest.fn().mockResolvedValue({
+                  forEach: (
+                    callback: (doc: {
+                      data: () => Record<string, unknown>;
+                    }) => void,
+                  ) =>
+                    callback({
+                      data: () => ({ merchant_id: 'closed', is_active: false }),
+                    }),
+                }),
+              }),
+            };
+          }),
+        }),
+      } as never,
+      {} as never,
+    );
+
+    await expect(service.getFoodDetails('food1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

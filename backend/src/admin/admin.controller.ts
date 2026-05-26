@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Put,
   Delete,
@@ -32,6 +33,7 @@ import type { UploadedImageFile } from '../common/types/uploaded-image-file';
 import { FoodsManagementService } from '../foods/foods-management.service';
 import { CreateFoodDto } from './dto/create-food.dto';
 import { UpdateFoodDto } from './dto/update-food.dto';
+import { AdminMerchantsService } from './admin-merchants.service';
 
 @ApiTags('admin')
 @Controller('admin')
@@ -41,13 +43,29 @@ import { UpdateFoodDto } from './dto/update-food.dto';
 export class AdminController {
   constructor(
     private readonly foodsManagementService: FoodsManagementService,
+    private readonly adminMerchantsService: AdminMerchantsService,
   ) {}
+
+  @Get('dashboard')
+  @ApiOperation({ summary: 'Get admin merchant and menu dashboard counts' })
+  @ApiOkResponse({
+    schema: {
+      example: {
+        total_merchants: 106,
+        total_active_items: 312,
+        total_inactive_items: 29,
+      },
+    },
+  })
+  async getDashboard() {
+    return this.adminMerchantsService.getDashboard();
+  }
 
   @Post('foods')
   @ApiOperation({
-    summary: 'Create new food entry',
+    summary: 'Create new food entry (legacy admin route)',
     description:
-      'Requires a request-only `recipe`. Gemini generates nutrition fields and rejects menus below GOOD; recipe ingredients are never persisted.',
+      'Legacy compatibility endpoint. New admin UI should use POST /admin/merchants/:merchantId/foods. Requires a request-only `recipe`; recipe ingredients are never persisted.',
   })
   @ApiBody({
     type: CreateFoodDto,
@@ -69,7 +87,7 @@ export class AdminController {
 
   @Put('foods/:id')
   @ApiOperation({
-    summary: 'Update food entry',
+    summary: 'Update food entry (legacy admin route)',
     description: 'Partial body allowed — same shape as create.',
   })
   @ApiBody({
@@ -101,9 +119,9 @@ export class AdminController {
     }),
   )
   @ApiOperation({
-    summary: 'Upload or replace a food photo',
+    summary: 'Upload or replace a food photo (legacy admin route)',
     description:
-      'Accepts one JPEG, PNG, or WebP image (max 5 MB), uploads it to Cloudinary, and persists `photo_url`.',
+      'Legacy compatibility endpoint. Accepts one JPEG, PNG, or WebP image (max 5 MB), uploads it to Cloudinary, and persists `photo_url`.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -134,7 +152,7 @@ export class AdminController {
   }
 
   @Delete('foods/:id')
-  @ApiOperation({ summary: 'Soft delete food entry' })
+  @ApiOperation({ summary: 'Soft delete food entry (legacy admin route)' })
   @ApiOkResponse({
     schema: { example: { message: 'Food soft-deleted successfully' } },
   })

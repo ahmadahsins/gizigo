@@ -79,8 +79,7 @@ export class MerchantController {
   ) {
     return this.foodsManagementService.listFoodsForMerchant(
       req.merchantId,
-      query.page,
-      query.limit,
+      query,
     );
   }
 

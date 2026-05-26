@@ -37,8 +37,7 @@ export class MerchantsService {
       : db.collection('merchants').doc();
 
     const merchantId = merchantRef.id;
-    const ownerUid =
-      options.ownerUid ?? ('owner_uid' in dto ? dto.owner_uid : undefined);
+    const ownerUid = options.ownerUid;
 
     const payload = this.buildMerchantPayload(merchantId, dto, {
       ownerUid,
@@ -75,7 +74,6 @@ export class MerchantsService {
 
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.address !== undefined) patch.address = dto.address;
-    if (dto.owner_uid !== undefined) patch.owner_uid = dto.owner_uid;
     if (dto.is_verified !== undefined) patch.is_verified = dto.is_verified;
     if (dto.is_active !== undefined) patch.is_active = dto.is_active;
 
