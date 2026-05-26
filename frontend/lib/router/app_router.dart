@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/admin/presentation/screens/admin_home_screen.dart';
+import '../../features/admin/presentation/screens/admin_merchant_detail_screen.dart';
+import '../../features/admin/data/models/admin_merchant.dart';
 import '../../features/splash/presentation/screens/splash_screen.dart';
 import '../../features/splash/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/merchant_register_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/merchant/presentation/screens/merchant_home_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
+import '../../features/food/data/models/food_detail.dart';
 import '../../features/food/presentation/screens/food_detail_screen.dart';
+import '../../features/food/presentation/screens/food_merchant_detail_screen.dart';
+import '../../features/location/domain/entities/location_item.dart';
 import '../../features/location/presentation/screens/select_location_map_screen.dart';
 import '../../features/location/presentation/screens/select_location_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
@@ -20,11 +28,16 @@ class AppRouter {
   static const String welcome = 'welcome';
   static const String login = 'login';
   static const String register = 'register';
+  static const String registerMerchant = 'register-merchant';
+  static const String adminHome = 'admin-home';
+  static const String adminMerchantDetail = 'admin-merchant-detail';
+  static const String merchantHome = 'merchant-home';
   static const String home = 'home';
   static const String search = 'search';
   static const String selectLocation = 'select-location';
   static const String selectLocationMap = 'select-location-map';
   static const String foodDetail = 'food-detail';
+  static const String foodMerchantDetail = 'food-merchant-detail';
   static const String profile = 'profile';
 
   // Navigator keys
@@ -101,11 +114,59 @@ class AppRouter {
         ),
       ),
 
+      // Merchant register (no bottom nav)
+      GoRoute(
+        path: '/register/merchant',
+        name: registerMerchant,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const MerchantRegisterScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.ease;
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        ),
+      ),
+
       // Main app screens (no bottom nav)
       GoRoute(
         path: '/',
         name: home,
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/admin',
+        name: adminHome,
+        builder: (context, state) => const AdminHomeScreen(),
+      ),
+      GoRoute(
+        path: '/merchant',
+        name: merchantHome,
+        builder: (context, state) => const MerchantHomeScreen(),
+      ),
+      GoRoute(
+        path: '/admin/merchants/:id',
+        name: adminMerchantDetail,
+        builder: (context, state) {
+          final merchant = state.extra is AdminMerchant
+              ? state.extra as AdminMerchant
+              : null;
+
+          return AdminMerchantDetailScreen(
+            merchantId: state.pathParameters['id']!,
+            merchantName: state.uri.queryParameters['name'] ?? '',
+            merchant: merchant,
+          );
+        },
       ),
       GoRoute(
         path: '/search',
@@ -128,7 +189,13 @@ class AppRouter {
       GoRoute(
         path: '/select-location/map',
         name: selectLocationMap,
-        builder: (context, state) => const SelectLocationMapScreen(),
+        builder: (context, state) {
+          return SelectLocationMapScreen(
+            initialLocation: state.extra is LocationItem
+                ? state.extra as LocationItem
+                : null,
+          );
+        },
       ),
       GoRoute(
         path: '/profile',
@@ -143,6 +210,26 @@ class AppRouter {
           final foodId = state.pathParameters['id']!;
           return FoodDetailScreen(foodId: foodId);
         },
+        routes: [
+          GoRoute(
+            path: 'merchant',
+            name: foodMerchantDetail,
+            builder: (context, state) {
+              final merchant = state.extra is FoodMerchantDetail
+                  ? state.extra as FoodMerchantDetail
+                  : const FoodMerchantDetail(
+                      name: 'Merchant',
+                      email: '',
+                      address: '',
+                      photoUrl: '',
+                      latitude: null,
+                      longitude: null,
+                    );
+
+              return FoodMerchantDetailScreen(merchant: merchant);
+            },
+          ),
+        ],
       ),
     ],
   );

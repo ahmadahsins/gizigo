@@ -14,6 +14,7 @@ class FoodDetail {
     required this.healthLabels,
     required this.nutritionalInfo,
     required this.priceComparisons,
+    required this.merchant,
   });
 
   final String id;
@@ -27,6 +28,7 @@ class FoodDetail {
   final List<String> healthLabels;
   final FoodNutritionalInfo? nutritionalInfo;
   final List<FoodPriceComparison> priceComparisons;
+  final FoodMerchantDetail merchant;
 
   NutritionGrade? get grade => NutritionGrade.tryParse(nutritionGrade);
 
@@ -43,12 +45,19 @@ class FoodDetail {
     final comparisons = json['price_comparisons'];
     final labels = json['health_labels'];
     final nutritionalInfo = json['nutritional_info'];
+    final merchantJson = _asMap(json['merchant'] ?? json['vendor']);
+    final vendorName = _asString(
+      json['vendor_name'],
+      fallback: _asString(
+        merchantJson?['name'] ?? merchantJson?['business_name'],
+      ),
+    );
 
     return FoodDetail(
       id: _asString(json['id'], fallback: _asString(json['food_id'])),
       name: _asString(json['name'], fallback: 'Untitled food'),
       description: _asString(json['description']),
-      vendorName: _asString(json['vendor_name']),
+      vendorName: vendorName,
       imageUrl: _asString(
         json['image_url'],
         fallback: _asString(json['photo_url']),
@@ -77,7 +86,17 @@ class FoodDetail {
                 )
                 .toList(growable: false)
           : const [],
+      merchant: FoodMerchantDetail.fromJson(
+        json,
+        merchantJson: merchantJson,
+        fallbackName: vendorName,
+      ),
     );
+  }
+
+  static Map<String, dynamic>? _asMap(Object? value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
   }
 
   static String _asString(Object? value, {String fallback = ''}) {
@@ -94,6 +113,102 @@ class FoodDetail {
   static double? _asDouble(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '');
+  }
+}
+
+class FoodMerchantDetail {
+  const FoodMerchantDetail({
+    required this.name,
+    required this.email,
+    required this.address,
+    required this.photoUrl,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String name;
+  final String email;
+  final String address;
+  final String photoUrl;
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasLocation => latitude != null && longitude != null;
+
+  String displayName({String fallback = 'Merchant'}) {
+    if (name.isNotEmpty) return name;
+    return fallback.trim().isEmpty ? 'Merchant' : fallback;
+  }
+
+  factory FoodMerchantDetail.fromJson(
+    Map<String, dynamic> json, {
+    Map<String, dynamic>? merchantJson,
+    required String fallbackName,
+  }) {
+    final merchant = merchantJson ?? const <String, dynamic>{};
+    final coordinates = FoodDetail._asMap(
+      merchant['coordinates'] ?? json['merchant_coordinates'],
+    );
+    final lat = FoodDetail._asDouble(
+      merchant['lat'] ??
+          merchant['latitude'] ??
+          json['merchant_lat'] ??
+          json['merchant_latitude'] ??
+          json['vendor_lat'] ??
+          json['vendor_latitude'] ??
+          coordinates?['lat'] ??
+          coordinates?['latitude'],
+    );
+    final lng = FoodDetail._asDouble(
+      merchant['lng'] ??
+          merchant['longitude'] ??
+          json['merchant_lng'] ??
+          json['merchant_longitude'] ??
+          json['vendor_lng'] ??
+          json['vendor_longitude'] ??
+          coordinates?['lng'] ??
+          coordinates?['longitude'],
+    );
+
+    return FoodMerchantDetail(
+      name: FoodDetail._asString(
+        merchant['name'] ?? merchant['business_name'],
+        fallback: FoodDetail._asString(
+          json['merchant_name'] ?? json['business_name'],
+          fallback: fallbackName,
+        ),
+      ),
+      email: FoodDetail._asString(
+        merchant['email'] ?? merchant['business_email'],
+        fallback: FoodDetail._asString(
+          json['merchant_email'] ??
+              json['business_email'] ??
+              json['vendor_email'],
+        ),
+      ),
+      address: FoodDetail._asString(
+        merchant['address'],
+        fallback: FoodDetail._asString(
+          json['merchant_address'] ??
+              json['business_address'] ??
+              json['vendor_address'] ??
+              json['address'],
+        ),
+      ),
+      photoUrl: FoodDetail._asString(
+        merchant['photo_url'] ??
+            merchant['image_url'] ??
+            merchant['avatar_url'],
+        fallback: FoodDetail._asString(
+          json['merchant_photo_url'] ??
+              json['merchant_image_url'] ??
+              json['vendor_photo_url'] ??
+              json['vendor_image_url'],
+        ),
+      ),
+      latitude: lat,
+      longitude: lng,
+    );
   }
 }
 

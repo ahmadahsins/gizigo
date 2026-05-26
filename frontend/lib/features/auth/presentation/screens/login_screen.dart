@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../router/app_router.dart';
+import '../../data/auth_role_router.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/google_button.dart';
@@ -64,10 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
         value: idToken,
       );
 
-      await DioClient(storage: _secureStorage).post(ApiConstants.authSync);
-
-      if (!mounted) return;
-      context.goNamed('home');
+      await _syncAuthAndOpenHome();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       _showError(_authErrorMessage(error));
@@ -92,7 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final googleUser = await GoogleSignIn().signIn();
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -119,10 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
         key: ApiConstants.firebaseIdTokenStorageKey,
         value: idToken,
       );
-      await DioClient(storage: _secureStorage).post(ApiConstants.authSync);
-
-      if (!mounted) return;
-      context.goNamed('home');
+      await _syncAuthAndOpenHome();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       _showError(_authErrorMessage(error));
@@ -155,6 +153,16 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       _showError('Reset password gagal. Coba lagi.');
     }
+  }
+
+  Future<void> _syncAuthAndOpenHome() async {
+    final routeName = await AuthRoleRouter.routeNameForCurrentUser(
+      client: DioClient(storage: _secureStorage),
+    );
+
+    if (!mounted) return;
+
+    context.goNamed(routeName);
   }
 
   String _authErrorMessage(FirebaseAuthException error) {
@@ -340,6 +348,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 72),
+                      const _MerchantPartnerSection(),
                     ],
                   ),
                 ),
@@ -348,6 +358,47 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _MerchantPartnerSection extends StatelessWidget {
+  const _MerchantPartnerSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Join as a partner',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.lexend(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF3D3D3D),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Manage your menu and track orders via\n'
+          'the GiziGo Merchant Portal',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            height: 1.35,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF4B4B4B),
+          ),
+        ),
+        const SizedBox(height: 24),
+        PrimaryButton(
+          text: 'Sign up as Merchant',
+          onPressed: () {
+            context.pushNamed(AppRouter.registerMerchant);
+          },
+        ),
+      ],
     );
   }
 }

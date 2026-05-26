@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gizigo/router/app_router.dart';
+import 'package:gizigo/features/auth/data/auth_role_router.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,11 +20,20 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _navigationTimer = Timer(const Duration(seconds: 3), () {
+    _navigationTimer = Timer(const Duration(seconds: 3), () async {
       if (!mounted) return;
+
       final isLoggedIn =
           Firebase.apps.isNotEmpty && FirebaseAuth.instance.currentUser != null;
-      context.goNamed(isLoggedIn ? AppRouter.home : AppRouter.welcome);
+      if (!isLoggedIn) {
+        context.goNamed(AppRouter.welcome);
+        return;
+      }
+
+      final routeName = await AuthRoleRouter.routeNameForCurrentUser();
+      if (!mounted) return;
+
+      context.goNamed(routeName);
     });
   }
 

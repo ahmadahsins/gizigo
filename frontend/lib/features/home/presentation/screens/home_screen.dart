@@ -123,6 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                 CategoriesSection(
                   categories: categories,
+                  isLoading: isInitialLoading,
                   onCategoryTap: _openCategorySearch,
                 ),
                 const SizedBox(height: 32),

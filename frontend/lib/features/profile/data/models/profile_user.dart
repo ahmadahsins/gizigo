@@ -3,6 +3,8 @@ class ProfileUser {
     required this.name,
     required this.username,
     required this.email,
+    required this.role,
+    required this.merchantId,
     required this.gender,
     required this.age,
     required this.heightCm,
@@ -18,6 +20,8 @@ class ProfileUser {
   final String name;
   final String username;
   final String email;
+  final String role;
+  final String merchantId;
   final String gender;
   final int? age;
   final int? heightCm;
@@ -29,11 +33,17 @@ class ProfileUser {
   final List<String> tasteProfile;
   final String preferredLanguage;
 
+  bool get isCustomer => role == 'customer';
+  bool get isMerchant => role == 'merchant';
+  bool get isAdmin => role == 'admin';
+
   factory ProfileUser.fromJson(Map<String, dynamic> json) {
     return ProfileUser(
       name: _asString(json['name']),
       username: _asString(json['username']),
       email: _asString(json['email']),
+      role: _roleValue(json['role']),
+      merchantId: _asString(json['merchant_id']),
       gender: _genderLabel(_asString(json['gender'])),
       age: _asInt(json['age']),
       heightCm: _asInt(json['height_cm']),
@@ -60,6 +70,14 @@ class ProfileUser {
       'MALE' => 'Male',
       'FEMALE' => 'Female',
       _ => '',
+    };
+  }
+
+  static String _roleValue(Object? value) {
+    return switch (_asString(value).toLowerCase()) {
+      'merchant' => 'merchant',
+      'admin' => 'admin',
+      _ => 'customer',
     };
   }
 

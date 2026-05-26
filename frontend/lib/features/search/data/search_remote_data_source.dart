@@ -78,15 +78,17 @@ class SearchRemoteDataSource {
   Future<List<HomeCategory>> getCategories() async {
     final response = await _client.get(ApiConstants.metaFoodCategories);
     final data = response.data;
-    if (data is! Map<String, dynamic>) return const [];
+    if (data is! Map<String, dynamic>) return HomeCategory.defaultCategories;
 
     final items = data['items'];
-    if (items is! List) return const [];
+    if (items is! List) return HomeCategory.defaultCategories;
 
-    return items
+    final categories = items
         .whereType<Map>()
         .map((item) => HomeCategory.fromJson(Map<String, dynamic>.from(item)))
         .toList(growable: false);
+
+    return HomeCategory.withDefaultCategories(categories);
   }
 
   Future<SearchFoodItem?> getFeaturedFood({double? lat, double? lng}) async {
