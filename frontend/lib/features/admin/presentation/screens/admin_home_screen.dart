@@ -24,12 +24,11 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
-  static const String _hiddenMerchantsStorageKey = 'admin_hidden_merchants';
 
   late final AdminRemoteDataSource _remoteDataSource;
   late Future<AdminDashboardData> _dashboardFuture;
   final TextEditingController _searchController = TextEditingController();
-  final Set<String> _hiddenMerchantIds = {};
+  final Set<String> _deletedMerchantIds = {};
   String _query = '';
 
   @override
@@ -37,7 +36,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     super.initState();
     _remoteDataSource = AdminRemoteDataSource(DioClient());
     _dashboardFuture = _loadDashboardData();
-    _loadHiddenMerchants();
   }
 
   @override
@@ -48,29 +46,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   Future<AdminDashboardData> _loadDashboardData() async {
     return _remoteDataSource.getDashboardData(
-      excludedMerchantIds: _hiddenMerchantIds,
-    );
-  }
-
-  Future<void> _loadHiddenMerchants() async {
-    final raw = await _secureStorage.read(key: _hiddenMerchantsStorageKey);
-    if (!mounted || raw == null || raw.trim().isEmpty) return;
-
-    setState(() {
-      _hiddenMerchantIds
-        ..clear()
-        ..addAll(
-          raw.split(',').map((id) => id.trim()).where((id) => id.isNotEmpty),
-        );
-    });
-    _refreshDashboard();
-  }
-
-  Future<void> _rememberHiddenMerchant(String merchantId) async {
-    _hiddenMerchantIds.add(merchantId);
-    await _secureStorage.write(
-      key: _hiddenMerchantsStorageKey,
-      value: _hiddenMerchantIds.join(','),
+      excludedMerchantIds: _deletedMerchantIds,
     );
   }
 
@@ -113,7 +89,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     });
   }
 
-  Future<void> _hideMerchantLocally(String merchantId) async {
+  Future<void> _removeMerchantLocally(String merchantId) async {
     final currentData = await _dashboardFuture.catchError((_) {
       return const AdminDashboardData(
         merchants: [],
@@ -236,21 +212,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
     if (!mounted) return;
 
-    if (result != 'delete' && result != 'hide') {
+    if (result != 'delete') {
       await _refreshDashboard();
       return;
     }
 
-    await _rememberHiddenMerchant(merchant.id);
+    _deletedMerchantIds.add(merchant.id);
+    await _removeMerchantLocally(merchant.id);
     if (!mounted) return;
 
-    final message = result == 'delete'
-        ? 'Merchant berhasil dihapus.'
-        : 'Backend belum menghapus permanen, merchant disembunyikan dari dashboard.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-    await _hideMerchantLocally(merchant.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Merchant berhasil dihapus.')),
+    );
     await _refreshDashboard();
   }
 }

@@ -1,9 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_skeleton.dart';
@@ -13,6 +17,8 @@ import '../../../admin/data/models/admin_food.dart';
 import '../../../admin/data/models/admin_merchant.dart';
 import '../../../admin/presentation/screens/admin_add_menu_screen.dart';
 import '../../../admin/presentation/screens/admin_menu_detail_screen.dart';
+import '../../../food/data/models/food_detail.dart';
+import '../../../food/presentation/screens/food_merchant_detail_screen.dart';
 
 enum _MerchantMenuFilter { all, active, inactive }
 
@@ -24,6 +30,8 @@ class MerchantHomeScreen extends StatefulWidget {
 }
 
 class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+
   late final AdminRemoteDataSource _remoteDataSource;
   late Future<_MerchantDashboardData> _dashboardFuture;
   final TextEditingController _searchController = TextEditingController();
@@ -176,6 +184,87 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     await _refreshDashboard();
   }
 
+  Future<void> _openMerchantProfile() async {
+    final merchant = _merchant;
+    if (merchant == null) {
+      _showToast('Profil merchant belum bisa dimuat.', isError: true);
+      return;
+    }
+
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute(
+        builder: (context) => FoodMerchantDetailScreen(
+          merchant: FoodMerchantDetail(
+            name: merchant.name,
+            email: merchant.email,
+            address: merchant.address,
+            photoUrl: '',
+            latitude: merchant.latitude,
+            longitude: merchant.longitude,
+          ),
+          onSaveChanges: _saveMerchantProfile,
+          onLogout: _handleMerchantLogout,
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    if (result is FoodMerchantDetail) {
+      setState(() {
+        _merchant = AdminMerchant(
+          id: merchant.id,
+          name: result.name,
+          address: result.address,
+          isActive: merchant.isActive,
+          email: result.email,
+          latitude: result.latitude,
+          longitude: result.longitude,
+        );
+      });
+    }
+  }
+
+  Future<FoodMerchantDetail> _saveMerchantProfile(
+    FoodMerchantDetail updated,
+    String? _,
+  ) async {
+    final currentMerchant = _merchant;
+    if (currentMerchant == null) {
+      throw StateError('Profil merchant belum dimuat.');
+    }
+
+    final saved = await _remoteDataSource.updateOwnMerchant(
+      id: currentMerchant.id,
+      name: updated.name,
+      address: updated.address,
+      email: updated.email,
+      latitude: updated.latitude,
+      longitude: updated.longitude,
+    );
+
+    if (mounted) setState(() => _merchant = saved);
+
+    return FoodMerchantDetail(
+      name: saved.name,
+      email: saved.email.isNotEmpty ? saved.email : updated.email,
+      address: saved.address,
+      photoUrl: updated.photoUrl,
+      latitude: saved.latitude ?? updated.latitude,
+      longitude: saved.longitude ?? updated.longitude,
+    );
+  }
+
+  Future<void> _handleMerchantLogout() async {
+    await Future.wait([
+      FirebaseAuth.instance.signOut(),
+      GoogleSignIn().signOut(),
+    ]);
+    await _secureStorage.delete(key: ApiConstants.firebaseIdTokenStorageKey);
+
+    if (!mounted) return;
+    context.goNamed(AppRouter.login);
+  }
+
   String get _displayMerchantName {
     final name = _merchant?.name.trim() ?? '';
     return name.isEmpty ? 'Merchant' : name;
@@ -254,7 +343,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                 onFilterChanged: (filter) {
                   setState(() => _selectedFilter = filter);
                 },
-                onProfileTap: () => context.pushNamed(AppRouter.profile),
+                onProfileTap: _openMerchantProfile,
                 onDetail: _openMenuDetail,
                 onAvailabilityChanged: _setFoodAvailability,
               ),
@@ -798,14 +887,35 @@ class _AvailabilitySwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Switch(
-      value: value,
-      onChanged: enabled ? onChanged : null,
-      activeThumbColor: Colors.white,
-      activeTrackColor: const Color(0xFF3A7746),
-      inactiveThumbColor: Colors.white,
-      inactiveTrackColor: const Color(0xFFCFCFCF),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: enabled ? () => onChanged(!value) : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 34,
+        height: 18,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: value ? const Color(0xFF3A7746) : const Color(0xFFCFCFCF),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

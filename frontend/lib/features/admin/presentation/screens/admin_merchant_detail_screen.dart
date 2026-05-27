@@ -327,7 +327,7 @@ class _AdminMerchantDetailScreenState extends State<AdminMerchantDetailScreen> {
     );
 
     if (!mounted) return;
-    if (result == 'delete' || result == 'hide') context.pop(result);
+    if (result == 'delete') context.pop(result);
   }
 
   Future<bool> _deleteMerchant() {

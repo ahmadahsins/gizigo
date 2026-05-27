@@ -11,7 +11,6 @@ import '../../../../core/widgets/app_skeleton.dart';
 import '../../../home/presentation/widgets/rating_badge.dart';
 import '../../data/food_remote_data_source.dart';
 import '../../data/models/food_detail.dart';
-import 'food_merchant_detail_screen.dart';
 import '../widgets/nutrition_rating_info_dialog.dart';
 
 class FoodDetailScreen extends StatefulWidget {
@@ -96,42 +95,28 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
             SliverAppBar(
               expandedHeight: 280,
               pinned: true,
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Center(
-                    child: _MerchantPhotoButton(
-                      imageUrl: food.merchant.photoUrl,
-                      merchantName: food.merchant.displayName(
-                        fallback: food.vendorName,
-                      ),
-                      size: 42,
-                      iconSize: 23,
-                      borderWidth: 2,
-                      onTap: () => _openMerchantDetail(food),
-                    ),
-                  ),
-                ),
-              ],
               flexibleSpace: FlexibleSpaceBar(
                 background: _FoodHeroImage(imageUrl: food.imageUrl),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _FoodDetailHeader(
                       food: food,
-                      onMerchantTap: () => _openMerchantDetail(food),
                       onRatingTap: () => showNutritionRatingInfoDialog(
                         context: context,
                         ratingText: food.ratingText,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    if (food.healthLabels.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _FoodHealthLabelRow(labels: food.healthLabels),
+                    ],
+                    const SizedBox(height: 24),
                     _DescriptionSection(description: food.description),
                     if (food.nutritionalInfo?.hasAnyValue == true) ...[
                       const SizedBox(height: 20),
@@ -226,14 +211,6 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
     } catch (_) {
       _showSnackBar('Link pemesanan belum bisa dibuka.');
     }
-  }
-
-  void _openMerchantDetail(FoodDetail food) {
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute<void>(
-        builder: (context) => FoodMerchantDetailScreen(merchant: food.merchant),
-      ),
-    );
   }
 
   void _showSnackBar(String message) {
@@ -341,12 +318,10 @@ class _FoodDetailSkeleton extends StatelessWidget {
 class _FoodDetailHeader extends StatelessWidget {
   const _FoodDetailHeader({
     required this.food,
-    required this.onMerchantTap,
     required this.onRatingTap,
   });
 
   final FoodDetail food;
-  final VoidCallback onMerchantTap;
   final VoidCallback onRatingTap;
 
   @override
@@ -358,170 +333,46 @@ class _FoodDetailHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(food.name, style: AppTextStyles.heading2),
-              const SizedBox(height: 8),
-              _MerchantDetailLink(
-                merchantName: food.merchant.displayName(
-                  fallback: food.vendorName,
+              Text(
+                food.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.lexend(
+                  fontSize: 24,
+                  height: 1.08,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
                 ),
-                onTap: onMerchantTap,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+              Text(
+                food.merchant.displayName(fallback: food.vendorName),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  height: 1.2,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 12),
               RatingBadge(text: food.ratingText, onTap: onRatingTap),
-              if (food.healthLabels.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _FoodHealthLabelRow(labels: food.healthLabels),
-              ],
             ],
           ),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _MerchantPhotoButton(
-              imageUrl: food.merchant.photoUrl,
-              merchantName: food.merchant.displayName(
-                fallback: food.vendorName,
-              ),
-              onTap: onMerchantTap,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              food.formattedPrice,
-              textAlign: TextAlign.end,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-              ),
-            ),
-          ],
+        Text(
+          food.formattedPrice,
+          textAlign: TextAlign.end,
+          style: GoogleFonts.inter(
+            fontSize: 21,
+            height: 1.08,
+            fontWeight: FontWeight.w800,
+            color: AppColors.primary,
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _MerchantPhotoButton extends StatelessWidget {
-  const _MerchantPhotoButton({
-    required this.imageUrl,
-    required this.merchantName,
-    required this.onTap,
-    this.size = 56,
-    this.iconSize = 27,
-    this.borderWidth = 3,
-  });
-
-  final String imageUrl;
-  final String merchantName;
-  final VoidCallback onTap;
-  final double size;
-  final double iconSize;
-  final double borderWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Buka detail merchant $merchantName',
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFEFF6EF),
-              border: Border.all(color: Colors.white, width: borderWidth),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.14),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: imageUrl.isEmpty
-                  ? Icon(
-                      Icons.storefront_rounded,
-                      color: AppColors.primary,
-                      size: iconSize,
-                    )
-                  : Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.storefront_rounded,
-                          color: AppColors.primary,
-                          size: iconSize,
-                        );
-                      },
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MerchantDetailLink extends StatelessWidget {
-  const _MerchantDetailLink({
-    required this.merchantName,
-    required this.onTap,
-  });
-
-  final String merchantName;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF2F8F2),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 42),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.store_rounded,
-                size: 17,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  merchantName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 19,
-                color: AppColors.primary,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -541,17 +392,23 @@ class _FoodHealthLabelRow extends StatelessWidget {
 
     if (displayLabels.isEmpty) return const SizedBox.shrink();
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: Row(
-        children: [
-          for (var index = 0; index < displayLabels.length; index++) ...[
-            _FoodHealthLabel(displayLabels[index]),
-            if (index != displayLabels.length - 1) const SizedBox(width: 8),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final itemWidth = (constraints.maxWidth - spacing * 2) / 3;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: 8,
+          children: [
+            for (final label in displayLabels)
+              SizedBox(
+                width: itemWidth,
+                child: _FoodHealthLabel(label),
+              ),
           ],
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -560,8 +417,8 @@ class _FoodHealthLabel extends StatelessWidget {
   const _FoodHealthLabel(this.label);
 
   static const EdgeInsetsGeometry _padding = EdgeInsets.symmetric(
-    horizontal: 9,
-    vertical: 62,
+    horizontal: 12,
+    vertical: 9,
   );
 
   final String label;

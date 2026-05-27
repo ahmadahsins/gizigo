@@ -61,5 +61,11 @@ class ApiConstants {
   static String adminMerchantFoods(String id) =>
       '${adminMerchantDetails(id)}/foods';
 
+  static String adminMerchantFoodDetails(String merchantId, String foodId) =>
+      '${adminMerchantFoods(merchantId)}/${Uri.encodeComponent(foodId)}';
+
+  static String adminMerchantFoodPhoto(String merchantId, String foodId) =>
+      '${adminMerchantFoodDetails(merchantId, foodId)}/photo';
+
   static String adminFoodPhoto(String id) => '${adminFoodDetails(id)}/photo';
 }

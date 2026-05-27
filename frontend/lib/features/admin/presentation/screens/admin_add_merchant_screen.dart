@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
@@ -114,19 +113,6 @@ class _AdminAddMerchantScreenState extends State<AdminAddMerchantScreen> {
   }
 
   String _errorMessage(Object error) {
-    if (error is FirebaseAuthException) {
-      return switch (error.code) {
-        'email-already-in-use' => 'Email merchant sudah terdaftar.',
-        'invalid-email' => 'Format email merchant belum valid.',
-        'weak-password' => 'Password minimal 6 karakter.',
-        'firebase-not-configured' =>
-          error.message ?? 'Firebase belum dikonfigurasi.',
-        'missing-token' =>
-          error.message ?? 'Firebase token merchant tidak ditemukan.',
-        _ => error.message ?? 'Gagal membuat akun merchant.',
-      };
-    }
-
     if (error is DioException) {
       final data = error.response?.data;
       if (data is Map && data['message'] is String) {
@@ -137,6 +123,8 @@ class _AdminAddMerchantScreenState extends State<AdminAddMerchantScreen> {
       }
       final statusCode = error.response?.statusCode;
       if (statusCode != null) {
+        if (statusCode == 409) return 'Email merchant sudah terdaftar.';
+        if (statusCode == 400) return 'Data merchant belum valid.';
         return 'Gagal menambahkan merchant. Server memberi status $statusCode.';
       }
     }

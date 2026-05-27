@@ -9,6 +9,9 @@ class AdminFoodDetail {
     required this.healthLabels,
     required this.isAvailable,
     required this.ingredients,
+    this.gofoodLink = '',
+    this.grabfoodLink = '',
+    this.shopeefoodLink = '',
   });
 
   final String id;
@@ -20,10 +23,17 @@ class AdminFoodDetail {
   final List<String> healthLabels;
   final bool isAvailable;
   final List<AdminFoodIngredient> ingredients;
+  final String gofoodLink;
+  final String grabfoodLink;
+  final String shopeefoodLink;
 
   factory AdminFoodDetail.fromJson(Map<String, dynamic> json) {
     final labels = json['health_labels'];
-    final ingredients = json['ingredients'] ?? json['recipe_ingredients'];
+    final recipe = json['recipe'];
+    final ingredients =
+        json['ingredients'] ??
+        json['recipe_ingredients'] ??
+        (recipe is Map ? recipe['ingredients'] : null);
 
     return AdminFoodDetail(
       id: _asString(json['id'], fallback: _asString(json['food_id'])),
@@ -52,6 +62,18 @@ class AdminFoodDetail {
                 )
                 .toList(growable: false)
           : const [],
+      gofoodLink: _asString(
+        (json['comparison_data'] as Map?)?['gofood']?['url'],
+        fallback: _asString(json['gofood_link']),
+      ),
+      grabfoodLink: _asString(
+        (json['comparison_data'] as Map?)?['grabfood']?['url'],
+        fallback: _asString(json['grabfood_link']),
+      ),
+      shopeefoodLink: _asString(
+        (json['comparison_data'] as Map?)?['shopeefood']?['url'],
+        fallback: _asString(json['shopeefood_link']),
+      ),
     );
   }
 
