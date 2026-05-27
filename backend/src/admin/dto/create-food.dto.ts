@@ -19,12 +19,9 @@ import { FOOD_CATEGORY_KEYS } from '../../common/constants/food-categories';
 import { RecipeUnit } from '../../common/enums/recipe-unit.enum';
 
 class ProviderComparisonDto {
-  @ApiProperty({ description: 'Base price on this provider' })
-  @IsNumber()
-  price!: number;
-
   @ApiProperty({
-    description: 'Deep link URL to the food/merchant on this provider',
+    description:
+      'Deep link URL to the food/merchant on this provider. Display price is simulated by the backend from base_price.',
   })
   @IsUrl()
   url!: string;
@@ -148,7 +145,11 @@ export class CreateFoodDto {
   @IsNumber()
   recommendation_score?: number;
 
-  @ApiPropertyOptional({ type: ComparisonDataDto })
+  @ApiPropertyOptional({
+    type: ComparisonDataDto,
+    description:
+      'Optional provider deep links only. Platform prices are generated on-the-fly and are not persisted.',
+  })
   @IsOptional()
   @ValidateNested()
   @Type(() => ComparisonDataDto)

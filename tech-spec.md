@@ -95,8 +95,9 @@ selalu berada di Firebase Auth dan tidak pernah menjadi field Firestore.
 - `is_available`: boolean
 - `is_featured`: boolean (opsional; kartu hero “You Might Like This”)
 - `recommendation_score`: number (opsional; urutan `sort=recommended`)
-- `comparison_data`: object per provider (harga & deeplink)
-  - `gofood` | `grabfood` | `shopeefood`: `{ price: number, url: string, icon_url?: string }`
+- `comparison_data`: konfigurasi deeplink per provider; tidak berisi harga platform
+  - `gofood` | `grabfood` | `shopeefood`: `{ url: string, icon_url?: string }`
+  - Harga comparison tidak disimpan di Firestore; backend mensimulasikannya dari `base_price` saat detail diminta.
 
 ### D. Collection: `merchants`
 
@@ -149,7 +150,7 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | GET    | `/foods`                 | Daftar terpaginasi + filter; respons `{ items, total, page, limit, total_pages }`                 |
 | GET    | `/foods/search`          | **Sama** dengan `/foods` (semua query parameter dapat dipakai bersamaan, termasuk `q`)            |
 | GET    | `/foods/recommendations` | Home: `{ featured, recommendations, context }` — personalisasi dari profil + opsional `lat`/`lng` |
-| GET    | `/foods/:id`             | Detail; menyertakan `price_comparisons[]` dan simulasi ±5% per provider                           |
+| GET    | `/foods/:id`             | Detail; menyertakan `price_comparisons[]` Universal Mock fixed per window UTC enam jam            |
 
 **Query `GET /foods/recommendations`:**
 
@@ -180,9 +181,10 @@ Jika profil memiliki data tubuh atau preferensi, Gemini meranking menu aktif ber
 **Response detail (`GET /foods/:id`):** selain field dokumen, tersedia:
 
 - `vendor_name`, `image_url`
-- `price_comparisons`: array `{ platform_key, platform, price, base_price, order_url, icon_url }`
+- `price_comparisons`: array `{ platform_key, platform, price, base_price, order_url, icon_url }`; `price` adalah nilai mock backend sedangkan `base_price` adalah harga menu Firestore.
+- `price_comparison_updated_at`, `price_comparison_valid_until`: batas window UTC enam jam saat mock price berlaku; bernilai `null` jika tidak ada price comparison.
 
-Perbandingan harga di-detail menggunakan fluktuasi tersimulasi pada nilai `price` yang dikembalikan (lihat implementasi backend). Endpoint terpisah `/compare-price/:food_id` **tidak** digunakan; gunakan `GET /foods/:id`.
+Perbandingan harga dihitung on-the-fly oleh backend dari `foods.base_price`, hanya untuk provider yang memiliki deeplink di `comparison_data`. Simulasi memakai seed deterministik berbasis `foodId`, platform, dan awal bucket waktu. Nilai harga tetap sama selama window UTC enam jam yang sama meskipun detail dibuka berkali-kali, lalu dapat berubah pada window berikutnya. Endpoint terpisah `/compare-price/:food_id` **tidak** digunakan; gunakan `GET /foods/:id`.
 
 ### 5.4 Users (Bearer wajib)
 
@@ -257,7 +259,29 @@ Dimana:
 
 Gemini meranking kandidat menu aktif dari merchant aktif dengan profil tubuh dan preferensi pengguna, termasuk restrictions serta taste profile. Slot **featured** tetap mengutamakan `is_featured` pada urutan hasil. Scoring lokal lama (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source`. Menu merchant dengan `is_active: false` tidak tampil pada list, rekomendasi, maupun detail customer tanpa mengubah status `foods.is_available`.
 
-### D. Upload foto menu (Cloudinary)
+### D. Universal Mock Price Comparison
+
+Untuk kebutuhan hackathon, aplikasi tidak memakai API harga live GoFood, GrabFood, atau ShopeeFood. Merchant/admin hanya menginput deeplink platform yang tersedia pada form add/edit menu:
+
+```json
+{
+  "comparison_data": {
+    "gofood": { "url": "https://gofood.co.id/menu/example" },
+    "grabfood": { "url": "https://food.grab.com/menu/example" },
+    "shopeefood": { "url": "https://shopeefood.co.id/menu/example" }
+  }
+}
+```
+
+- Frontend tidak menyediakan dan tidak mengirim field harga per platform.
+- Firestore hanya menyimpan deeplink opsional (`url`, `icon_url`); harga platform tidak disimpan.
+- Saat `GET /foods/:id`, backend menggunakan `base_price` menu sebagai dasar dan menghitung mock price menggunakan seed `foodId + platform + bucketStart`.
+- Satu bucket berjalan selama enam jam berdasarkan UTC. Membuka/menutup ulang detail menu dalam bucket yang sama menghasilkan harga identik; harga baru hanya mungkin muncul ketika bucket berikutnya dimulai.
+- Response detail menyediakan `price_comparison_updated_at` dan `price_comparison_valid_until` agar Flutter dapat menampilkan masa berlaku atau men-cache hasil sampai window berakhir.
+- Rentang markup simulasi: GoFood `12%-18%`, GrabFood `8%-15%`, ShopeeFood `5%-12%`; hasil dibulatkan ke ratusan rupiah.
+- Platform tanpa deeplink tidak dimasukkan ke `price_comparisons`, karena customer tidak memiliki tujuan pemesanan yang dapat dibuka.
+
+### E. Upload foto menu (Cloudinary)
 
 Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload dilakukan melalui request terpisah setelah create menu berhasil. Pemisahan ini mencegah aset Cloudinary tidak terpakai apabila Gemini menolak resep dengan grade di bawah `GOOD`.
 
@@ -332,7 +356,8 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 11. **Profil:** `GET /users/me` / `PATCH /users/me` untuk data akun + onboarding; `POST /users/me/photo` (`multipart/form-data`, JPEG/PNG/WebP maks. 5 MB) untuk mengganti foto profil.
 12. **Tambah / edit menu merchant atau admin:**
     - User dapat memilih foto dan mengisi metadata maupun resep dalam satu form; urutan pengisian pada UI tidak dibatasi.
-    - Saat submit menu baru, kirim metadata + `recipe` terlebih dahulu ke `POST /merchant/foods` atau `POST /admin/merchants/{merchantId}/foods`, tanpa mengirim `photo_url` maupun binary foto.
+    - Form menyediakan URL opsional untuk GoFood, GrabFood, dan ShopeeFood; jangan meminta harga per platform karena backend membuat Universal Mock dari `base_price`.
+    - Saat submit menu baru, kirim metadata + `recipe` + `comparison_data` deeplink terlebih dahulu ke `POST /merchant/foods` atau `POST /admin/merchants/{merchantId}/foods`, tanpa mengirim `photo_url` maupun binary foto.
     - Bila create sukses, ambil `id` dari response lalu upload file terpilih menggunakan `POST /merchant/foods/{id}/photo` atau `POST /admin/merchants/{merchantId}/foods/{id}/photo` sebagai `multipart/form-data` field `file`.
     - Bila create ditolak Gemini, tampilkan alasan penolakan dan jangan menjalankan upload foto.
     - Saat mengganti foto pada menu yang sudah ada, panggil endpoint `/photo` secara langsung; tidak perlu mengirim ulang resep.
@@ -378,6 +403,11 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
       { "name": "Chicken breast", "amount": 150, "unit": "g" },
       { "name": "Lettuce", "amount": 80, "unit": "g" }
     ]
+  },
+  "comparison_data": {
+    "gofood": { "url": "https://gofood.co.id/menu/chicken-salad" },
+    "grabfood": { "url": "https://food.grab.com/menu/chicken-salad" },
+    "shopeefood": { "url": "https://shopeefood.co.id/menu/chicken-salad" }
   }
 }
 ```
@@ -424,12 +454,14 @@ file: <selected-image>
   "base_price": 17000,
   "nutrition_grade": "EXCELLENT",
   "vendor_name": "Warteg Sendowo",
+  "price_comparison_updated_at": "2026-05-27T00:00:00.000Z",
+  "price_comparison_valid_until": "2026-05-27T06:00:00.000Z",
   "price_comparisons": [
     {
       "platform_key": "gofood",
       "platform": "GoFood",
-      "price": 18000,
-      "base_price": 17500,
+      "price": 19500,
+      "base_price": 17000,
       "order_url": "https://…",
       "icon_url": "https://…"
     }

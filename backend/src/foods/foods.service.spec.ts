@@ -200,4 +200,77 @@ describe('FoodsService recommendations', () => {
       NotFoundException,
     );
   });
+
+  it('keeps platform prices stable within a six-hour window', async () => {
+    const service = new FoodsService(
+      {
+        getFirestore: jest.fn().mockReturnValue({
+          collection: jest.fn((name: string) => {
+            if (name !== 'foods') {
+              throw new Error(`Unexpected collection ${name}`);
+            }
+            return {
+              doc: jest.fn().mockReturnValue({
+                get: jest.fn().mockResolvedValue({
+                  exists: true,
+                  id: 'salad-123',
+                  data: () => ({
+                    name: 'Salad Buah',
+                    base_price: 30000,
+                    comparison_data: {
+                      gofood: { url: 'https://gofood.co.id/salad' },
+                      grabfood: { url: 'https://food.grab.com/salad' },
+                      shopeefood: { url: 'https://shopeefood.co.id/salad' },
+                    },
+                  }),
+                }),
+              }),
+            };
+          }),
+        }),
+      } as never,
+      {} as never,
+    );
+
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-27T00:10:00.000Z'));
+
+    try {
+      const first = await service.getFoodDetails('salad-123');
+      jest.setSystemTime(new Date('2026-05-27T05:59:59.000Z'));
+      const second = await service.getFoodDetails('salad-123');
+
+      expect(first.price_comparisons).toEqual(second.price_comparisons);
+      expect(first.price_comparison_updated_at).toBe(
+        '2026-05-27T00:00:00.000Z',
+      );
+      expect(first.price_comparison_valid_until).toBe(
+        '2026-05-27T06:00:00.000Z',
+      );
+      expect(first.price_comparisons).toHaveLength(3);
+      expect(first.price_comparisons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            platform_key: 'gofood',
+            base_price: 30000,
+            order_url: 'https://gofood.co.id/salad',
+          }),
+        ]),
+      );
+      expect(
+        first.price_comparisons.every((item) => item.price > item.base_price),
+      ).toBe(true);
+
+      jest.setSystemTime(new Date('2026-05-27T06:00:00.000Z'));
+      const nextWindow = await service.getFoodDetails('salad-123');
+      expect(nextWindow.price_comparison_updated_at).toBe(
+        '2026-05-27T06:00:00.000Z',
+      );
+      expect(nextWindow.price_comparison_valid_until).toBe(
+        '2026-05-27T12:00:00.000Z',
+      );
+      expect(nextWindow.price_comparisons).not.toEqual(first.price_comparisons);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

@@ -134,6 +134,29 @@ describe('FoodsManagementService', () => {
     );
   });
 
+  it('stores provider deeplinks but strips client platform prices', async () => {
+    await service.createFood(
+      {
+        ...baseFoodDto,
+        comparison_data: {
+          gofood: {
+            url: 'https://gofood.co.id/menu/food1',
+            price: 99000,
+          },
+        },
+      } as never,
+      { role: UserRole.MERCHANT, merchantId: 'merchant_a' },
+    );
+
+    expect(foodRef.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comparison_data: {
+          gofood: { url: 'https://gofood.co.id/menu/food1' },
+        },
+      }),
+    );
+  });
+
   it('rejects food below GOOD without writing it', async () => {
     analyzeRecipe.mockResolvedValue({
       ...acceptedAssessment,

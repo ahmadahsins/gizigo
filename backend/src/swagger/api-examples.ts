@@ -59,9 +59,10 @@ export const MERCHANT_CREATE_FOOD_BODY_EXAMPLE = {
   },
   comparison_data: {
     gofood: {
-      price: 18000,
       url: 'https://gofood.co.id/merchant/example',
     },
+    grabfood: { url: 'https://food.grab.com/example' },
+    shopeefood: { url: 'https://shopeefood.co.id/example' },
   },
 };
 
@@ -130,12 +131,14 @@ export const FOOD_DETAIL_EXAMPLE = {
   vendor_name: 'Warteg Sendowo',
   image_url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
   nutritional_info: { calories: 450, protein_g: 35, fat_g: 18, carb_g: 30 },
+  price_comparison_updated_at: '2026-05-27T00:00:00.000Z',
+  price_comparison_valid_until: '2026-05-27T06:00:00.000Z',
   price_comparisons: [
     {
       platform_key: 'gofood',
       platform: 'GoFood',
-      price: 18000,
-      base_price: 17500,
+      price: 19500,
+      base_price: 17000,
       order_url: 'https://gofood.link/example',
       icon_url: 'https://example.com/gofood.png',
     },
@@ -192,12 +195,11 @@ export const ADMIN_CREATE_FOOD_BODY_EXAMPLE = {
   },
   comparison_data: {
     gofood: {
-      price: 18000,
       url: 'https://gofood.co.id/merchant/example',
       icon_url: 'https://example.com/gofood.png',
     },
-    grabfood: { price: 17500, url: 'https://food.grab.com/example' },
-    shopeefood: { price: 17000, url: 'https://shopeefood.co.id/example' },
+    grabfood: { url: 'https://food.grab.com/example' },
+    shopeefood: { url: 'https://shopeefood.co.id/example' },
   },
 };
 

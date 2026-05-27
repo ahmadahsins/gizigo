@@ -71,7 +71,7 @@ export class FoodsController {
   @ApiOperation({
     summary: 'Food detail + simulated multi-platform prices',
     description:
-      'Includes `price_comparisons` array for Flutter list UI and optional per-platform `icon_url`.',
+      'Includes Universal Mock `price_comparisons` generated from `base_price` for stored provider deeplinks. Prices stay fixed in a six-hour UTC window, are not persisted, and include validity timestamps.',
   })
   @ApiOkResponse({
     schema: { example: FOOD_DETAIL_EXAMPLE },

@@ -291,7 +291,7 @@ export class FoodsManagementService {
       nutritional_info: assessment.nutritional_info,
       nutrition_assessment_reason: assessment.reason,
       nutrition_analyzed_at: admin.firestore.FieldValue.serverTimestamp(),
-      comparison_data: dto.comparison_data ?? null,
+      comparison_data: this.buildDeliveryLinksPayload(dto.comparison_data),
     };
 
     if (actor.role === UserRole.ADMIN) {
@@ -318,6 +318,10 @@ export class FoodsManagementService {
       if (value === undefined) continue;
       if (key === 'recipe') continue;
       if (actor.role === UserRole.MERCHANT && this.isAdminOnlyFoodField(key)) {
+        continue;
+      }
+      if (key === 'comparison_data') {
+        patch[key] = this.buildDeliveryLinksPayload(value);
         continue;
       }
       patch[key] = value;
@@ -378,5 +382,29 @@ export class FoodsManagementService {
 
   private matchesText(value: unknown, term: string): boolean {
     return typeof value === 'string' && value.toLowerCase().includes(term);
+  }
+
+  private buildDeliveryLinksPayload(value: unknown) {
+    const raw =
+      value !== null && typeof value === 'object'
+        ? (value as Record<string, unknown>)
+        : {};
+    const deliveryLinks: Record<string, { url: string; icon_url?: string }> =
+      {};
+
+    for (const platform of ['gofood', 'grabfood', 'shopeefood']) {
+      const candidate = raw[platform];
+      if (candidate === null || typeof candidate !== 'object') continue;
+      const row = candidate as Record<string, unknown>;
+      if (typeof row['url'] !== 'string') continue;
+      deliveryLinks[platform] = {
+        url: row['url'],
+        ...(typeof row['icon_url'] === 'string'
+          ? { icon_url: row['icon_url'] }
+          : {}),
+      };
+    }
+
+    return Object.keys(deliveryLinks).length > 0 ? deliveryLinks : null;
   }
 }
