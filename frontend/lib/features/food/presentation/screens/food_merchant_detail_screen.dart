@@ -16,6 +16,7 @@ class FoodMerchantDetailScreen extends StatefulWidget {
     required this.merchant,
     this.onSaveChanges,
     this.onDelete,
+    this.onLogout,
   });
 
   final FoodMerchantDetail merchant;
@@ -25,6 +26,7 @@ class FoodMerchantDetailScreen extends StatefulWidget {
   )?
   onSaveChanges;
   final Future<bool> Function()? onDelete;
+  final Future<void> Function()? onLogout;
 
   static const _defaultPoint = LatLng(-7.76892, 110.38298);
   static const _osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -100,6 +102,7 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isBusinessProfile = widget.onLogout != null;
     final point = _merchant.hasLocation
         ? LatLng(_merchant.latitude!, _merchant.longitude!)
         : FoodMerchantDetailScreen._defaultPoint;
@@ -118,14 +121,25 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
             padding: const EdgeInsets.fromLTRB(34, 28, 34, 34),
             children: [
               _MerchantDetailHeader(
-                title: _isEditing ? 'Edit Merchant' : 'Detail Merchant',
+                title: isBusinessProfile
+                    ? _isEditing
+                          ? 'Edit Business Profile'
+                          : 'Business Profile'
+                    : _isEditing
+                    ? 'Edit Merchant'
+                    : 'Detail Merchant',
                 onBack: _handleBack,
               ),
               const SizedBox(height: 28),
               if (_isEditing)
-                ..._buildEditFields()
+                ..._buildEditFields(showPassword: !isBusinessProfile)
               else
-                ..._buildReadonlyFields(name, email, address),
+                ..._buildReadonlyFields(
+                  name,
+                  email,
+                  address,
+                  showPassword: !isBusinessProfile,
+                ),
               const SizedBox(height: 22),
               _MerchantMapCard(
                 name: _isEditing ? _currentLocation.name : name,
@@ -138,7 +152,7 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
                     : point,
                 onTap: _isEditing ? _openLocationPicker : null,
               ),
-              const SizedBox(height: 27),
+              SizedBox(height: isBusinessProfile ? 83 : 27),
               if (_isEditing) ...[
                 _MerchantActionButton(
                   label: 'Save Changes',
@@ -155,16 +169,18 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
                 ),
               ] else ...[
                 _MerchantActionButton(
-                  label: 'Edit Merchant',
+                  label: isBusinessProfile ? 'Edit' : 'Edit Merchant',
                   color: AppColors.primary,
                   onPressed: _startEditing,
                 ),
                 const SizedBox(height: 24),
                 _MerchantActionButton(
-                  label: 'Delete',
+                  label: isBusinessProfile ? 'Logout' : 'Delete',
                   color: const Color(0xFFCC1B1F),
                   isLoading: _isSaving,
-                  onPressed: _deleteMerchant,
+                  onPressed: isBusinessProfile
+                      ? _logoutMerchant
+                      : _deleteMerchant,
                 ),
               ],
             ],
@@ -174,27 +190,34 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
     );
   }
 
-  List<Widget> _buildReadonlyFields(String name, String email, String address) {
+  List<Widget> _buildReadonlyFields(
+    String name,
+    String email,
+    String address, {
+    required bool showPassword,
+  }) {
     return [
       _MerchantReadonlyField(label: 'Business Name', value: name),
       const SizedBox(height: 23),
       _MerchantReadonlyField(label: 'Business Email', value: email),
-      const SizedBox(height: 23),
-      const _MerchantReadonlyField(
-        label: 'Password',
-        value: 'Tidak ditampilkan demi keamanan',
-      ),
+      if (showPassword) ...[
+        const SizedBox(height: 23),
+        const _MerchantReadonlyField(
+          label: 'Password',
+          value: 'Tidak ditampilkan demi keamanan',
+        ),
+      ],
       const SizedBox(height: 23),
       _MerchantReadonlyField(
         label: 'Address',
         value: address,
-        minHeight: 80,
-        maxLines: 3,
+        minHeight: showPassword ? 80 : 50,
+        maxLines: showPassword ? 3 : 1,
       ),
     ];
   }
 
-  List<Widget> _buildEditFields() {
+  List<Widget> _buildEditFields({required bool showPassword}) {
     return [
       _MerchantEditableField(
         label: 'Business Name',
@@ -220,26 +243,28 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
           return null;
         },
       ),
-      const SizedBox(height: 22),
-      _MerchantEditableField(
-        label: 'Password',
-        controller: _passwordController,
-        hintText: 'Kosongkan jika tidak ingin mengganti password',
-        obscureText: true,
-        validator: (value) {
-          final text = value ?? '';
-          if (text.isNotEmpty && text.length < 6) {
-            return 'Password minimal 6 karakter.';
-          }
-          return null;
-        },
-      ),
+      if (showPassword) ...[
+        const SizedBox(height: 22),
+        _MerchantEditableField(
+          label: 'Password',
+          controller: _passwordController,
+          hintText: 'Kosongkan jika tidak ingin mengganti password',
+          obscureText: true,
+          validator: (value) {
+            final text = value ?? '';
+            if (text.isNotEmpty && text.length < 6) {
+              return 'Password minimal 6 karakter.';
+            }
+            return null;
+          },
+        ),
+      ],
       const SizedBox(height: 22),
       _MerchantEditableField(
         label: 'Address',
         controller: _addressController,
         hintText: 'Enter Full Address here',
-        maxLines: 2,
+        maxLines: showPassword ? 2 : 1,
         onChanged: (_) => setState(() {}),
         validator: (value) {
           if ((value ?? '').trim().isEmpty) return 'Address wajib diisi.';
@@ -348,6 +373,20 @@ class _FoodMerchantDetailScreenState extends State<FoodMerchantDetailScreen> {
 
       setState(() => _isSaving = false);
       _showToast(_errorMessage(error), isError: true);
+    }
+  }
+
+  Future<void> _logoutMerchant() async {
+    final logout = widget.onLogout;
+    if (logout == null || _isSaving) return;
+
+    setState(() => _isSaving = true);
+    try {
+      await logout();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showToast('Logout gagal. Coba lagi.', isError: true);
     }
   }
 

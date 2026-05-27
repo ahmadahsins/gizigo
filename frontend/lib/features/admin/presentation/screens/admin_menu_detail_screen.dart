@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -50,6 +51,9 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  final _gofoodController = TextEditingController();
+  final _grabfoodController = TextEditingController();
+  final _shopeefoodController = TextEditingController();
   final List<_IngredientEntry> _ingredients = [];
   final Set<String> _selectedTags = {};
 
@@ -75,6 +79,9 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _gofoodController.dispose();
+    _grabfoodController.dispose();
+    _shopeefoodController.dispose();
     for (final ingredient in _ingredients) {
       ingredient.dispose();
     }
@@ -116,6 +123,9 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
         ? null
         : detail.foodCategory;
     _isAvailable = detail.isAvailable;
+    _gofoodController.text = detail.gofoodLink;
+    _grabfoodController.text = detail.grabfoodLink;
+    _shopeefoodController.text = detail.shopeefoodLink;
     _selectedTags
       ..clear()
       ..addAll(detail.healthLabels);
@@ -170,9 +180,19 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
       _showToast('Price harus diisi dengan angka yang valid.', isError: true);
       return;
     }
+    final recipeIngredients = _recipeIngredients();
+
+    final hasPlatformLink = _gofoodController.text.trim().isNotEmpty ||
+        _grabfoodController.text.trim().isNotEmpty ||
+        _shopeefoodController.text.trim().isNotEmpty;
+    if (!hasPlatformLink) {
+      _showToast('Isi minimal satu link platform delivery.', isError: true);
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {
+      final currentImageUrl = _detail?.imageUrl ?? widget.food.imageUrl;
       final saved = widget.useMerchantEndpoint
           ? await _remoteDataSource.updateOwnFood(
               foodId: widget.food.id,
@@ -182,8 +202,13 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
               basePrice: price,
               healthLabels: _selectedTags.toList(growable: false),
               isAvailable: _isAvailable,
+              recipeIngredients: recipeIngredients,
+              gofoodLink: _gofoodController.text.trim(),
+              grabfoodLink: _grabfoodController.text.trim(),
+              shopeefoodLink: _shopeefoodController.text.trim(),
               photoBytes: _photoBytes,
               photoFilename: _photoFilename,
+              currentImageUrl: currentImageUrl,
             )
           : await _remoteDataSource.updateFood(
               foodId: widget.food.id,
@@ -193,8 +218,13 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
               basePrice: price,
               healthLabels: _selectedTags.toList(growable: false),
               isAvailable: _isAvailable,
+              recipeIngredients: recipeIngredients,
+              gofoodLink: _gofoodController.text.trim(),
+              grabfoodLink: _grabfoodController.text.trim(),
+              shopeefoodLink: _shopeefoodController.text.trim(),
               photoBytes: _photoBytes,
               photoFilename: _photoFilename,
+              currentImageUrl: currentImageUrl,
             );
       if (!mounted) return;
 
@@ -205,10 +235,10 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
         _hasChanges = true;
       });
       _showToast('Menu berhasil diperbarui.');
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      _showToast('Gagal memperbarui menu. Coba lagi.', isError: true);
+      _showToast(_errorMessage(error), isError: true);
     }
   }
 
@@ -242,6 +272,43 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
   int? _parsePrice(String value) {
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
     return int.tryParse(digits);
+  }
+
+  List<Map<String, Object>> _recipeIngredients() {
+    return _ingredients
+        .map((entry) {
+          final name = entry.nameController.text.trim();
+          final amount = double.tryParse(
+            entry.quantityController.text.replaceAll(',', '.').trim(),
+          );
+          if (name.isEmpty || amount == null || amount <= 0) return null;
+
+          return <String, Object>{
+            'name': name,
+            'amount': amount,
+            'unit': entry.unit,
+          };
+        })
+        .nonNulls
+        .toList(growable: false);
+  }
+
+  String _errorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      final message = data is Map ? data['message']?.toString() ?? '' : '';
+      if (message.toLowerCase().contains('gemini api is not configured')) {
+        return 'Backend Gemini belum dikonfigurasi. Hubungi maintainer backend.';
+      }
+      if (message.isNotEmpty) return message;
+
+      final statusCode = error.response?.statusCode;
+      if (statusCode != null) {
+        return 'Gagal memperbarui menu. Server memberi status $statusCode.';
+      }
+    }
+
+    return 'Gagal memperbarui menu. Coba lagi.';
   }
 
   String _categoryLabel(String value) {
@@ -448,6 +515,104 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
                         alignment: Alignment.centerLeft,
                         child: _AddIngredientButton(onPressed: _addIngredient),
                       ),
+                    const SizedBox(height: 34),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Expanded(
+                          flex: 2,
+                          child: _FieldLabel('Delivery Platform Links'),
+                        ),
+                        const SizedBox(width: 8),
+                        if (_isEditing)
+                          Expanded(
+                            flex: 1,
+                            child: Text(
+                              'At least one link required',
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF696969),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (_isEditing) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add links to your menu on delivery platforms to enable direct ordering.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF696969),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'GoFood Link',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF4A4A4A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _isEditing
+                        ? _MenuTextField(
+                            controller: _gofoodController,
+                            hintText: 'Example: https://gofood.link/...',
+                            enabled: true,
+                          )
+                        : _ReadonlyBox(
+                            text: _gofoodController.text.isEmpty
+                                ? '-'
+                                : _gofoodController.text,
+                          ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'GrabFood Link',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF4A4A4A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _isEditing
+                        ? _MenuTextField(
+                            controller: _grabfoodController,
+                            hintText: 'Example: https://grab.com/food/...',
+                            enabled: true,
+                          )
+                        : _ReadonlyBox(
+                            text: _grabfoodController.text.isEmpty
+                                ? '-'
+                                : _grabfoodController.text,
+                          ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'ShopeeFood Link',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF4A4A4A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _isEditing
+                        ? _MenuTextField(
+                            controller: _shopeefoodController,
+                            hintText: 'Example: https://shopee.co.id/food/...',
+                            enabled: true,
+                          )
+                        : _ReadonlyBox(
+                            text: _shopeefoodController.text.isEmpty
+                                ? '-'
+                                : _shopeefoodController.text,
+                          ),
                     const SizedBox(height: 34),
                     _StatusSwitchRow(
                       value: _isAvailable,

@@ -90,35 +90,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     onTap: () => context.pushNamed(AppRouter.search),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      FilterDropdownChip(
-                        label: 'Filters',
-                        onTap: _openSearchFilters,
-                      ),
-                      const SizedBox(width: 8),
-                      FilterDropdownChip(
-                        label: 'Price',
-                        onTap: _openSearchFilters,
-                      ),
-                      const SizedBox(width: 8),
-                      FilterDropdownChip(
-                        label: 'Label',
-                        onTap: _openSearchFilters,
-                      ),
-                      const SizedBox(width: 8),
-                      FilterDropdownChip(
-                        label: 'Range',
-                        onTap: _openSearchFilters,
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 32),
 
                 CategoriesSection(

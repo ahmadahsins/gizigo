@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -48,6 +49,9 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  final _gofoodController = TextEditingController();
+  final _grabfoodController = TextEditingController();
+  final _shopeefoodController = TextEditingController();
   final List<_IngredientEntry> _ingredients = [_IngredientEntry()];
   final Set<String> _selectedTags = {};
 
@@ -69,6 +73,9 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _gofoodController.dispose();
+    _grabfoodController.dispose();
+    _shopeefoodController.dispose();
     for (final ingredient in _ingredients) {
       ingredient.dispose();
     }
@@ -102,6 +109,19 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
       _showSnackBar('Price harus diisi dengan angka yang valid.');
       return;
     }
+    final recipeIngredients = _recipeIngredients();
+    if (recipeIngredients.isEmpty) {
+      _showSnackBar('Isi minimal satu recipe ingredient yang valid.');
+      return;
+    }
+
+    final hasPlatformLink = _gofoodController.text.trim().isNotEmpty ||
+        _grabfoodController.text.trim().isNotEmpty ||
+        _shopeefoodController.text.trim().isNotEmpty;
+    if (!hasPlatformLink) {
+      _showSnackBar('Isi minimal satu link platform delivery.');
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {
@@ -113,6 +133,10 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
           basePrice: price,
           healthLabels: _selectedTags.toList(growable: false),
           isAvailable: _isAvailable,
+          recipeIngredients: recipeIngredients,
+          gofoodLink: _gofoodController.text.trim(),
+          grabfoodLink: _grabfoodController.text.trim(),
+          shopeefoodLink: _shopeefoodController.text.trim(),
           photoBytes: _photoBytes,
           photoFilename: _photoFilename,
         );
@@ -125,6 +149,10 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
           basePrice: price,
           healthLabels: _selectedTags.toList(growable: false),
           isAvailable: _isAvailable,
+          recipeIngredients: recipeIngredients,
+          gofoodLink: _gofoodController.text.trim(),
+          grabfoodLink: _grabfoodController.text.trim(),
+          shopeefoodLink: _shopeefoodController.text.trim(),
           photoBytes: _photoBytes,
           photoFilename: _photoFilename,
         );
@@ -132,10 +160,10 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
       if (!mounted) return;
 
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      _showSnackBar('Gagal menambahkan menu. Cek data dan coba lagi.');
+      _showSnackBar(_errorMessage(error));
     }
   }
 
@@ -158,6 +186,43 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
   int? _parsePrice(String value) {
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
     return int.tryParse(digits);
+  }
+
+  List<Map<String, Object>> _recipeIngredients() {
+    return _ingredients
+        .map((entry) {
+          final name = entry.nameController.text.trim();
+          final amount = double.tryParse(
+            entry.quantityController.text.replaceAll(',', '.').trim(),
+          );
+          if (name.isEmpty || amount == null || amount <= 0) return null;
+
+          return <String, Object>{
+            'name': name,
+            'amount': amount,
+            'unit': entry.unit,
+          };
+        })
+        .nonNulls
+        .toList(growable: false);
+  }
+
+  String _errorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      final message = data is Map ? data['message']?.toString() ?? '' : '';
+      if (message.toLowerCase().contains('gemini api is not configured')) {
+        return 'Backend Gemini belum dikonfigurasi. Hubungi maintainer backend.';
+      }
+      if (message.isNotEmpty) return message;
+
+      final statusCode = error.response?.statusCode;
+      if (statusCode != null) {
+        return 'Gagal menambahkan menu. Server memberi status $statusCode.';
+      }
+    }
+
+    return 'Gagal menambahkan menu. Cek data dan coba lagi.';
   }
 
   void _showSnackBar(String message) {
@@ -283,6 +348,80 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: _AddIngredientButton(onPressed: _addIngredient),
+              ),
+              const SizedBox(height: 34),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Expanded(
+                    flex: 2,
+                    child: _FieldLabel('Delivery Platform Links'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      'At least one link required',
+                      textAlign: TextAlign.right,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF696969),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Add links to your menu on delivery platforms to enable direct ordering.',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF696969),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'GoFood Link',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF4A4A4A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _TextInput(
+                controller: _gofoodController,
+                hintText: 'Example: https://gofood.link/...',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'GrabFood Link',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF4A4A4A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _TextInput(
+                controller: _grabfoodController,
+                hintText: 'Example: https://grab.com/food/...',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'ShopeeFood Link',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF4A4A4A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _TextInput(
+                controller: _shopeefoodController,
+                hintText: 'Example: https://shopee.co.id/food/...',
               ),
               const SizedBox(height: 34),
               _StatusSwitchRow(
