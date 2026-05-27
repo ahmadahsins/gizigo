@@ -45,6 +45,12 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
 - `GET /foods/recommendations` memakai data profil dan preferensi untuk
   meranking menu tersedia. Bila AI tidak tersedia, endpoint menggunakan
   ranking lokal dan mengembalikan `context.recommendation_source: "fallback"`.
+- Price comparison memakai Universal Mock: create/update menu boleh mengirim
+  `comparison_data` berisi URL GoFood/GrabFood/ShopeeFood saja. Backend
+  menghasilkan harga platform dari `base_price` saat `GET /foods/:id`;
+  nilainya fixed dalam window UTC enam jam dan dilengkapi
+  `price_comparison_updated_at` serta `price_comparison_valid_until`. Harga
+  platform tidak disimpan di Firestore.
 
 ## Merchant Menu Management
 
@@ -60,6 +66,9 @@ personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
   tidak mengirim `merchant_id`. Request wajib memuat `recipe`, lalu foto
   dikirim terpisah ke `POST /merchant/foods/:id/photo` setelah menu lolos
   analisis.
+- Flutter dapat mengirim deeplink opsional di `comparison_data`, misalnya
+  `{ "gofood": { "url": "https://..." } }`; form tidak perlu meminta harga
+  GoFood/GrabFood/ShopeeFood.
 - `PUT /merchant/foods/:id` dapat mengubah metadata atau toggle
   `is_available`; Gemini hanya dipanggil kembali bila `recipe` baru dikirim.
 

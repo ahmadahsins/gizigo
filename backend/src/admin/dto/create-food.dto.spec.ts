@@ -23,6 +23,39 @@ describe('CreateFoodDto recipe validation', () => {
     expect(errors).toHaveLength(0);
   });
 
+  it('accepts provider deeplinks without client-supplied platform prices', async () => {
+    const dto = plainToInstance(CreateFoodDto, {
+      ...validBody,
+      comparison_data: {
+        gofood: { url: 'https://gofood.co.id/menu/example' },
+        grabfood: { url: 'https://food.grab.com/menu/example' },
+      },
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects legacy client-supplied platform prices', async () => {
+    const dto = plainToInstance(CreateFoodDto, {
+      ...validBody,
+      comparison_data: {
+        gofood: {
+          price: 18000,
+          url: 'https://gofood.co.id/menu/example',
+        },
+      },
+    });
+
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    expect(errors.some((error) => error.property === 'comparison_data')).toBe(
+      true,
+    );
+  });
+
   it('rejects invalid serving counts and ingredient units', async () => {
     const dto = plainToInstance(CreateFoodDto, {
       ...validBody,

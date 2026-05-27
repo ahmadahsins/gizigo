@@ -12,10 +12,8 @@ const PLATFORM_KEYS = ['gofood', 'grabfood', 'shopeefood'] as const;
 type PlatformKey = (typeof PLATFORM_KEYS)[number];
 type ScoredFood = Record<string, unknown> & { personalization_score: number };
 type StoredRecord = Record<string, unknown>;
-type PriceComparisonData = Partial<Record<PlatformKey, PlatformPrice>>;
-type PlatformPrice = {
-  price: number;
-  simulated_price?: number;
+type DeliveryLinksData = Partial<Record<PlatformKey, DeliveryLink>>;
+type DeliveryLink = {
   url: string;
   icon_url?: string;
 };
@@ -24,6 +22,23 @@ const PLATFORM_LABEL: Record<PlatformKey, string> = {
   gofood: 'GoFood',
   grabfood: 'GrabFood',
   shopeefood: 'ShopeeFood',
+};
+
+const PLATFORM_MARKUP_RANGE: Record<
+  PlatformKey,
+  { minimum: number; maximum: number }
+> = {
+  gofood: { minimum: 0.12, maximum: 0.18 },
+  grabfood: { minimum: 0.08, maximum: 0.15 },
+  shopeefood: { minimum: 0.05, maximum: 0.12 },
+};
+const PRICE_COMPARISON_BUCKET_HOURS = 6;
+const PRICE_COMPARISON_BUCKET_MS =
+  PRICE_COMPARISON_BUCKET_HOURS * 60 * 60 * 1000;
+type PriceComparisonWindow = {
+  bucketStartMs: number;
+  updatedAt: string;
+  validUntil: string;
 };
 
 @Injectable()
@@ -175,20 +190,9 @@ export class FoodsService {
     }
 
     const safeFoodData = this.toRecord(foodData);
-    const comparisonData = this.readComparisonData(
+    const deliveryLinks = this.readDeliveryLinks(
       safeFoodData['comparison_data'],
     );
-    if (comparisonData) {
-      PLATFORM_KEYS.forEach((provider) => {
-        if (comparisonData[provider]?.price != null) {
-          const fluctuation = Math.random() * 0.1 - 0.05;
-          const simulatedPrice =
-            comparisonData[provider].price * (1 + fluctuation);
-          comparisonData[provider].simulated_price =
-            Math.round(simulatedPrice / 100) * 100;
-        }
-      });
-    }
 
     const merchantsMap = await this.loadMerchantsMap(db, [
       { merchant_id: safeFoodData['merchant_id'] },
@@ -199,6 +203,13 @@ export class FoodsService {
       throw new NotFoundException('Food not found');
     }
     const vendor_name = this.stringOrNull(merchantDoc?.['name']);
+    const priceComparisonWindow = this.priceComparisonWindow();
+    const priceComparisons = this.buildPriceComparisons(
+      doc.id,
+      Number(safeFoodData['base_price']),
+      deliveryLinks,
+      priceComparisonWindow.bucketStartMs,
+    );
 
     delete safeFoodData['recipe'];
     return {
@@ -206,8 +217,12 @@ export class FoodsService {
       ...safeFoodData,
       vendor_name,
       image_url: safeFoodData['photo_url'] ?? null,
-      comparison_data: comparisonData ?? null,
-      price_comparisons: this.buildPriceComparisons(comparisonData),
+      comparison_data: deliveryLinks ?? null,
+      price_comparisons: priceComparisons,
+      price_comparison_updated_at:
+        priceComparisons.length > 0 ? priceComparisonWindow.updatedAt : null,
+      price_comparison_valid_until:
+        priceComparisons.length > 0 ? priceComparisonWindow.validUntil : null,
     };
   }
 
@@ -495,8 +510,15 @@ export class FoodsService {
     return 0;
   }
 
-  private buildPriceComparisons(comparisonData: PriceComparisonData | null) {
-    if (!comparisonData) return [];
+  private buildPriceComparisons(
+    foodId: string,
+    basePrice: number,
+    deliveryLinks: DeliveryLinksData | null,
+    bucketStartMs: number,
+  ) {
+    if (!deliveryLinks || !Number.isFinite(basePrice) || basePrice < 0) {
+      return [];
+    }
     const rows: Array<{
       platform_key: PlatformKey;
       platform: string;
@@ -507,15 +529,20 @@ export class FoodsService {
     }> = [];
 
     for (const key of PLATFORM_KEYS) {
-      const row = comparisonData[key];
-      if (row?.price != null) {
+      const link = deliveryLinks[key];
+      if (link) {
         rows.push({
           platform_key: key,
           platform: PLATFORM_LABEL[key],
-          price: row.simulated_price ?? row.price,
-          base_price: row.price,
-          order_url: row.url,
-          icon_url: row.icon_url ?? null,
+          price: this.simulatedPlatformPrice(
+            foodId,
+            key,
+            basePrice,
+            bucketStartMs,
+          ),
+          base_price: basePrice,
+          order_url: link.url,
+          icon_url: link.icon_url ?? null,
         });
       }
     }
@@ -579,21 +606,55 @@ export class FoodsService {
     return value instanceof admin.firestore.GeoPoint ? value : undefined;
   }
 
-  private readComparisonData(value: unknown): PriceComparisonData | null {
+  private readDeliveryLinks(value: unknown): DeliveryLinksData | null {
     const raw = this.toRecord(value);
-    const data: PriceComparisonData = {};
+    const data: DeliveryLinksData = {};
     for (const key of PLATFORM_KEYS) {
       const row = this.toRecord(raw[key]);
-      const price = row['price'];
       const url = row['url'];
-      if (typeof price === 'number' && typeof url === 'string') {
+      if (typeof url === 'string') {
         data[key] = {
-          price,
           url,
           icon_url: this.optionalString(row['icon_url']),
         };
       }
     }
     return Object.keys(data).length ? data : null;
+  }
+
+  private simulatedPlatformPrice(
+    foodId: string,
+    platform: PlatformKey,
+    basePrice: number,
+    bucketStartMs: number,
+  ): number {
+    const range = PLATFORM_MARKUP_RANGE[platform];
+    const fraction = this.stableFraction(
+      `${foodId}:${platform}:${bucketStartMs}`,
+    );
+    const markup = range.minimum + fraction * (range.maximum - range.minimum);
+    return Math.round((basePrice * (1 + markup)) / 100) * 100;
+  }
+
+  private priceComparisonWindow(now = new Date()): PriceComparisonWindow {
+    const bucketStartMs =
+      Math.floor(now.getTime() / PRICE_COMPARISON_BUCKET_MS) *
+      PRICE_COMPARISON_BUCKET_MS;
+    return {
+      bucketStartMs,
+      updatedAt: new Date(bucketStartMs).toISOString(),
+      validUntil: new Date(
+        bucketStartMs + PRICE_COMPARISON_BUCKET_MS,
+      ).toISOString(),
+    };
+  }
+
+  private stableFraction(value: string): number {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) / 4294967295;
   }
 }
