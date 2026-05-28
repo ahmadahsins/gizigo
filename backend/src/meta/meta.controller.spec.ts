@@ -12,9 +12,9 @@ describe('MetaController', () => {
     controller = module.get<MetaController>(MetaController);
   });
 
-  it('food-categories returns five entries', () => {
+  it('food-categories returns nine entries', () => {
     const res = controller.getFoodCategories();
-    expect(res.items.length).toBe(5);
+    expect(res.items.length).toBe(9);
     expect(res.items[0]).toHaveProperty('key');
   });
 
