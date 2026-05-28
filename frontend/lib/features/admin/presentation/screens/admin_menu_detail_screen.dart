@@ -10,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../data/admin_remote_data_source.dart';
 import '../../data/models/admin_food.dart';
 import '../../data/models/admin_food_detail.dart';
+import '../widgets/ai_loading_dialog.dart';
 
 class AdminMenuDetailScreen extends StatefulWidget {
   const AdminMenuDetailScreen({
@@ -191,6 +192,8 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
     }
 
     setState(() => _isSaving = true);
+    showAiLoadingDialog(context);
+
     try {
       final currentImageUrl = _detail?.imageUrl ?? widget.food.imageUrl;
       final saved = widget.useMerchantEndpoint
@@ -227,6 +230,7 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
               currentImageUrl: currentImageUrl,
             );
       if (!mounted) return;
+      Navigator.of(context).pop();
 
       setState(() {
         _applyDetail(saved);
@@ -237,6 +241,7 @@ class _AdminMenuDetailScreenState extends State<AdminMenuDetailScreen> {
       _showToast('Menu berhasil diperbarui.');
     } catch (error) {
       if (!mounted) return;
+      Navigator.of(context).pop();
       setState(() => _isSaving = false);
       _showToast(_errorMessage(error), isError: true);
     }
