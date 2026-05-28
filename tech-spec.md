@@ -48,7 +48,7 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
   - `age`: number (tahun)
   - `weight_kg`, `height_cm`: number
   - `nutrition_goal`: string enum `DIET` | `BULKING` | `MAINTAIN` (memengaruhi `/foods/recommendations`)
-- `food_preferences`: array string (dicocokkan longgar dengan `foods.health_labels`)
+- `food_preferences`: array string; preference tertentu dipakai sebagai hard filter rekomendasi (mis. `Vegetarian Lifestyle` -> menu dengan sinyal vegetarian/vegan/plant-based), lalu sisanya dipakai untuk scoring/ranking
 - `dietary_restrictions`: array string (pembatasan diet untuk rekomendasi Gemini)
 - `taste_profile`: array string (profil rasa untuk rekomendasi Gemini)
   - `onboarding_completed`: boolean
@@ -150,7 +150,7 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | GET    | `/foods`                 | Daftar terpaginasi + filter; respons `{ items, total, page, limit, total_pages }`                 |
 | GET    | `/foods/search`          | **Sama** dengan `/foods` (semua query parameter dapat dipakai bersamaan, termasuk `q`)            |
 | GET    | `/foods/recommendations` | Home: `{ featured, recommendations, context }` — personalisasi dari profil + opsional `lat`/`lng` |
-| GET    | `/foods/:id`             | Detail; menyertakan `price_comparisons[]` Universal Mock fixed per window UTC enam jam            |
+| GET    | `/foods/:id`             | Detail; menyertakan `price_comparisons[]` Universal Mock harga + estimasi delivery fixed per window UTC enam jam |
 
 **Query `GET /foods/recommendations`:**
 
@@ -160,7 +160,7 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | `featured_limit` | Default `1` — jumlah slot hero “You Might Like This” (mis. `is_featured` diprioritaskan) |
 | `limit`          | Default `15` — panjang list “Recommendations for You” setelah featured                   |
 
-Jika profil memiliki data tubuh atau preferensi, Gemini meranking menu aktif berdasarkan `gender`, `age`, `height_cm`, `weight_kg`, `nutrition_goal`, `food_preferences`, `dietary_restrictions`, dan `taste_profile`. Tanpa profil personalisasi atau saat Gemini gagal, ranking fallback ke `recommendation_score` + tier gizi (+ jarak jika ada).
+Jika profil memiliki data tubuh atau preferensi, backend menerapkan hard filter terlebih dahulu untuk preference yang punya makna diet jelas, misalnya `Vegetarian Lifestyle`, `Vegan`, `Plant-Based`, dan `Gluten Free`. Jika filter menghasilkan kandidat, hanya kandidat tersebut yang masuk scoring dan ranking Gemini; jika tidak ada kandidat cocok, backend fallback ke semua menu agar home tidak kosong. Setelah itu Gemini meranking menu aktif berdasarkan `gender`, `age`, `height_cm`, `weight_kg`, `nutrition_goal`, `food_preferences`, `dietary_restrictions`, dan `taste_profile`. Tanpa profil personalisasi atau saat Gemini gagal, ranking fallback ke `recommendation_score` + tier gizi (+ jarak jika ada). Response `context.hard_filters` menandai filter keras yang benar-benar diterapkan.
 
 **Query `GET /foods` & `GET /foods/search`:**
 
@@ -178,13 +178,19 @@ Jika profil memiliki data tubuh atau preferensi, Gemini meranking menu aktif ber
 
 **Field tambahan pada item list:** `vendor_name`, `image_url` (alias `photo_url`), dan `distance_in_km` jika `lat`/`lng` dikirim.
 
+**Query `GET /foods/:id`:**
+
+| Parameter    | Tipe   | Keterangan                                                                                      |
+| :----------- | :----- | :---------------------------------------------------------------------------------------------- |
+| `lat`, `lng` | number | Opsional; lokasi user (WGS84) untuk membuat Universal Mock estimasi delivery berbasis jarak      |
+
 **Response detail (`GET /foods/:id`):** selain field dokumen, tersedia:
 
 - `vendor_name`, `image_url`
-- `price_comparisons`: array `{ platform_key, platform, price, base_price, order_url, icon_url }`; `price` adalah nilai mock backend sedangkan `base_price` adalah harga menu Firestore.
-- `price_comparison_updated_at`, `price_comparison_valid_until`: batas window UTC enam jam saat mock price berlaku; bernilai `null` jika tidak ada price comparison.
+- `price_comparisons`: array `{ platform_key, platform, price, base_price, delivery_eta_min_minutes, delivery_eta_max_minutes, delivery_eta_text, order_url, icon_url }`; `price` dan ETA adalah nilai mock backend sedangkan `base_price` adalah harga menu Firestore.
+- `price_comparison_updated_at`, `price_comparison_valid_until`: batas window UTC enam jam saat mock price dan ETA berlaku; bernilai `null` jika tidak ada price comparison.
 
-Perbandingan harga dihitung on-the-fly oleh backend dari `foods.base_price`, hanya untuk provider yang memiliki deeplink di `comparison_data`. Simulasi memakai seed deterministik berbasis `foodId`, platform, dan awal bucket waktu. Nilai harga tetap sama selama window UTC enam jam yang sama meskipun detail dibuka berkali-kali, lalu dapat berubah pada window berikutnya. Endpoint terpisah `/compare-price/:food_id` **tidak** digunakan; gunakan `GET /foods/:id`.
+Perbandingan harga dan estimasi delivery dihitung on-the-fly oleh backend dari `foods.base_price`, deeplink provider, platform, window waktu, dan opsional jarak user ke merchant. Simulasi memakai seed deterministik berbasis `foodId`, platform, awal bucket waktu, dan bucket jarak. Nilai tetap sama selama window UTC enam jam yang sama untuk lokasi/bucket jarak yang sama, lalu dapat berubah pada window berikutnya. Endpoint terpisah `/compare-price/:food_id` **tidak** digunakan; gunakan `GET /foods/:id`.
 
 ### 5.4 Users (Bearer wajib)
 
@@ -223,11 +229,12 @@ Perbandingan harga dihitung on-the-fly oleh backend dari `foods.base_price`, han
 | PUT             | `/admin/merchants/:id`                             | Update metadata/email/password baru/status aktif dan sinkronkan Firebase Auth       |
 | DELETE          | `/admin/merchants/:id`                             | Soft delete merchant serta disable akun Auth                                        |
 | GET             | `/admin/merchants/:merchantId/foods`               | List/search/tab menu canonical untuk merchant tertentu                              |
+| GET             | `/admin/merchants/:merchantId/foods/:foodId`       | Detail menu scoped untuk form edit admin; recipe tidak dikembalikan                 |
 | POST            | `/admin/merchants/:merchantId/foods`               | Buat menu canonical tanpa `merchant_id`; resep dianalisis Gemini dan tidak disimpan |
 | PUT             | `/admin/merchants/:merchantId/foods/:foodId`       | Edit/toggle menu; recipe opsional untuk analisis ulang                              |
 | POST            | `/admin/merchants/:merchantId/foods/:foodId/photo` | Upload/replace foto menu Cloudinary                                                 |
 | DELETE          | `/admin/merchants/:merchantId/foods/:foodId`       | Soft delete menu merchant tersebut                                                  |
-| POST/PUT/DELETE | `/admin/foods...`                                  | Endpoint global legacy untuk kompatibilitas client lama                             |
+| GET/POST/PUT/DELETE | `/admin/foods...`                              | Endpoint global legacy untuk kompatibilitas client lama; `GET /admin/foods/:id` mengembalikan detail edit tanpa recipe |
 
 ---
 
@@ -257,9 +264,9 @@ Dimana:
 
 ### C. Rekomendasi personal (`GET /foods/recommendations`)
 
-Gemini meranking kandidat menu aktif dari merchant aktif dengan profil tubuh dan preferensi pengguna, termasuk restrictions serta taste profile. Slot **featured** tetap mengutamakan `is_featured` pada urutan hasil. Scoring lokal lama (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source`. Menu merchant dengan `is_active: false` tidak tampil pada list, rekomendasi, maupun detail customer tanpa mengubah status `foods.is_available`.
+Backend mengambil menu aktif dari merchant aktif, lalu menerapkan hard filtering berdasarkan `food_preferences` sebelum ranking. Saat ini preference seperti `Vegetarian Lifestyle`, `Vegetarian`, `Vegan`, atau `Plant-Based` hanya meloloskan menu yang memiliki sinyal vegetarian/vegan/plant-based pada `health_labels`, `food_category`, `name`, atau `description`; `Gluten Free` meloloskan menu dengan sinyal gluten-free. Jika hard filter tidak menghasilkan kandidat, backend memakai semua menu sebagai fallback agar home tidak kosong. Setelah filtering, Gemini meranking kandidat berdasarkan profil tubuh, `nutrition_goal`, preferences, restrictions, dan taste profile. Slot **featured** dipilih dari hasil ranking yang sudah difilter, sehingga menu featured yang tidak cocok dengan hard preference tidak dipaksa tampil. Scoring lokal (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source` dan filter aktif melalui `context.hard_filters`. Menu merchant dengan `is_active: false` tidak tampil pada list, rekomendasi, maupun detail customer tanpa mengubah status `foods.is_available`.
 
-### D. Universal Mock Price Comparison
+### D. Universal Mock Price Comparison & Delivery ETA
 
 Untuk kebutuhan hackathon, aplikasi tidak memakai API harga live GoFood, GrabFood, atau ShopeeFood. Merchant/admin hanya menginput deeplink platform yang tersedia pada form add/edit menu:
 
@@ -276,9 +283,11 @@ Untuk kebutuhan hackathon, aplikasi tidak memakai API harga live GoFood, GrabFoo
 - Frontend tidak menyediakan dan tidak mengirim field harga per platform.
 - Firestore hanya menyimpan deeplink opsional (`url`, `icon_url`); harga platform tidak disimpan.
 - Saat `GET /foods/:id`, backend menggunakan `base_price` menu sebagai dasar dan menghitung mock price menggunakan seed `foodId + platform + bucketStart`.
-- Satu bucket berjalan selama enam jam berdasarkan UTC. Membuka/menutup ulang detail menu dalam bucket yang sama menghasilkan harga identik; harga baru hanya mungkin muncul ketika bucket berikutnya dimulai.
+- Backend juga menghitung estimasi delivery mock (`delivery_eta_min_minutes`, `delivery_eta_max_minutes`, `delivery_eta_text`) untuk setiap platform. Jika `lat`/`lng` user dikirim dan merchant memiliki koordinat, ETA memakai bucket jarak: `0-2 km`, `2-5 km`, `5-10 km`, atau `>10 km`. Jika lokasi tidak tersedia, backend memakai fallback ETA default.
+- Satu bucket berjalan selama enam jam berdasarkan UTC. Membuka/menutup ulang detail menu dalam bucket yang sama menghasilkan harga dan ETA identik untuk bucket jarak yang sama; nilai baru hanya mungkin muncul ketika bucket berikutnya dimulai.
 - Response detail menyediakan `price_comparison_updated_at` dan `price_comparison_valid_until` agar Flutter dapat menampilkan masa berlaku atau men-cache hasil sampai window berakhir.
 - Rentang markup simulasi: GoFood `12%-18%`, GrabFood `8%-15%`, ShopeeFood `5%-12%`; hasil dibulatkan ke ratusan rupiah.
+- Rentang ETA dasar: tanpa lokasi `25-40 menit`; `0-2 km` sekitar `15-25 menit`; `2-5 km` sekitar `25-40 menit`; `5-10 km` sekitar `40-60 menit`; `>10 km` sekitar `55-75 menit`. Setiap platform mendapat offset kecil dan jitter deterministik.
 - Platform tanpa deeplink tidak dimasukkan ke `price_comparisons`, karena customer tidak memiliki tujuan pemesanan yang dapat dibuka.
 
 ### E. Upload foto menu (Cloudinary)
@@ -346,10 +355,11 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 5.  **Meta bootstrap:** `GET /meta/food-categories`, `GET /meta/nutrition-grades`, `GET /meta/nutrition-goals` untuk chip/filter dan wizard onboarding.
 6.  **Home — rekomendasi personal:**
     - `GET /foods/recommendations?lat=&lng=&featured_limit=1&limit=15` → `featured[]` untuk kartu besar “You Might Like This”, `recommendations[]` untuk list “Recommendations for You”.
+    - Jika user memilih preference seperti `Vegetarian Lifestyle`, backend menerapkan hard filter sebelum Gemini/local ranking; frontend bisa membaca `context.hard_filters` untuk debug atau badge kecil bila dibutuhkan.
     - Kategori horizontal / filter lain boleh tetap pakai `GET /foods` dengan query yang sama seperti sebelumnya.
 7.  **Search listing:** **`GET /foods/search`** dengan parameter **yang sama** seperti `/foods`, termasuk `q`.
 8.  **Detail menu:**
-    - `GET /foods/{id}` → render deskripsi, `vendor_name`, `nutrition_grade`, dan list **`price_comparisons`** (gunakan `price` untuk teks hijau; `order_url` untuk `url_launcher`).
+    - `GET /foods/{id}?lat=&lng=` → render deskripsi, `vendor_name`, `nutrition_grade`, dan list **`price_comparisons`** (gunakan `price` untuk teks hijau, `delivery_eta_text` untuk estimasi pengiriman, dan `order_url` untuk `url_launcher`).
     - Setelah layar terbuka, panggil `POST /users/me/recently-viewed` dengan `{ "food_id": "<id>" }`.
 9.  **Recently viewed:** `GET /users/me/recently-viewed?q=&page=&limit=` — kelompokkan di Flutter berdasarkan tanggal dari `viewed_at` (hari ini / kemarin / tanggal).
 10. **Lokasi:** Setelah user memilih lokasi (map / GPS), `POST /users/me/recent-locations`; daftar “Recent” dari `GET /users/me/recent-locations`. Autocomplete jalanan tetap bisa memakai Places di klien; `GET /meta/locations/search` saat ini placeholder.
@@ -361,6 +371,8 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
     - Bila create sukses, ambil `id` dari response lalu upload file terpilih menggunakan `POST /merchant/foods/{id}/photo` atau `POST /admin/merchants/{merchantId}/foods/{id}/photo` sebagai `multipart/form-data` field `file`.
     - Bila create ditolak Gemini, tampilkan alasan penolakan dan jangan menjalankan upload foto.
     - Saat mengganti foto pada menu yang sudah ada, panggil endpoint `/photo` secara langsung; tidak perlu mengirim ulang resep.
+    - Saat membuka form edit merchant, ambil default value dari `GET /merchant/foods/{id}`; response mengembalikan metadata tersimpan, deeplink platform, foto, dan status availability, tetapi tidak mengembalikan `recipe`.
+    - Saat membuka form edit admin canonical, ambil default value dari `GET /admin/merchants/{merchantId}/foods/{foodId}`. Untuk client lama, `GET /admin/foods/{id}` juga tersedia sebagai route legacy dengan bentuk detail yang sama dan tanpa `recipe`.
 13. **Landing dan profil merchant:**
     - `GET /merchant/dashboard` mengisi kartu jumlah menu aktif/nonaktif.
     - `GET /merchant/foods?q=&is_available=` mengisi list dan tab status; tombol detail membuka `GET /merchant/foods/{id}` sehingga menu hidden tetap dapat diedit.
@@ -383,7 +395,7 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 | Kelola menu merchant   | `GET/POST /merchant/foods`, `GET/PUT/DELETE /merchant/foods/:id`, `POST /merchant/foods/:id/photo`  |
 | Landing admin          | `GET /admin/dashboard`, `GET /admin/merchants?q=&is_active=`                                        |
 | Detail merchant admin  | `POST /admin/merchants`, `GET/PUT/DELETE /admin/merchants/:id`                                      |
-| Kelola menu admin      | `GET/POST /admin/merchants/:merchantId/foods`, `PUT/POST .../:foodId[/photo]`, `DELETE .../:foodId` |
+| Kelola menu admin      | `GET/POST /admin/merchants/:merchantId/foods`, `GET/PUT/DELETE /admin/merchants/:merchantId/foods/:foodId`, `POST .../:foodId/photo`; legacy `GET/PUT/DELETE /admin/foods/:id`, `POST /admin/foods/:id/photo` |
 
 ### E. Contoh payload
 
@@ -462,6 +474,9 @@ file: <selected-image>
       "platform": "GoFood",
       "price": 19500,
       "base_price": 17000,
+      "delivery_eta_min_minutes": 24,
+      "delivery_eta_max_minutes": 39,
+      "delivery_eta_text": "24-39 menit",
       "order_url": "https://…",
       "icon_url": "https://…"
     }
@@ -482,7 +497,9 @@ file: <selected-image>
   "context": {
     "nutrition_goal": "DIET",
     "onboarding_completed": true,
-    "personalized": true
+    "personalized": true,
+    "recommendation_source": "gemini",
+    "hard_filters": ["vegetarian"]
   }
 }
 ```

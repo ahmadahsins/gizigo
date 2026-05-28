@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
 import { GetFoodsQueryDto } from './dto/get-foods-query.dto';
 import { RecommendationsQueryDto } from './dto/recommendations-query.dto';
+import { FoodDetailQueryDto } from './dto/food-detail-query.dto';
 import { NutritionGrade } from '../common/enums/nutrition-grade.enum';
 import { NutritionGoal } from '../common/enums/nutrition-goal.enum';
 import * as geofire from 'geofire-common';
@@ -31,6 +32,11 @@ const PLATFORM_MARKUP_RANGE: Record<
   gofood: { minimum: 0.12, maximum: 0.18 },
   grabfood: { minimum: 0.08, maximum: 0.15 },
   shopeefood: { minimum: 0.05, maximum: 0.12 },
+};
+const PLATFORM_ETA_OFFSET_MINUTES: Record<PlatformKey, number> = {
+  gofood: 0,
+  grabfood: -2,
+  shopeefood: 3,
 };
 const PRICE_COMPARISON_BUCKET_HOURS = 6;
 const PRICE_COMPARISON_BUCKET_MS =
@@ -176,7 +182,7 @@ export class FoodsService {
     };
   }
 
-  async getFoodDetails(id: string) {
+  async getFoodDetails(id: string, query: FoodDetailQueryDto = {}) {
     const db = this.firebaseService.getFirestore();
     const doc = await db.collection('foods').doc(id).get();
 
@@ -203,12 +209,15 @@ export class FoodsService {
       throw new NotFoundException('Food not found');
     }
     const vendor_name = this.stringOrNull(merchantDoc?.['name']);
+    const merchantCoordinates = this.readGeoPoint(merchantDoc?.['coordinates']);
+    const distanceKm = this.detailDistanceKm(query, merchantCoordinates);
     const priceComparisonWindow = this.priceComparisonWindow();
     const priceComparisons = this.buildPriceComparisons(
       doc.id,
       Number(safeFoodData['base_price']),
       deliveryLinks,
       priceComparisonWindow.bucketStartMs,
+      distanceKm,
     );
 
     delete safeFoodData['recipe'];
@@ -588,6 +597,7 @@ export class FoodsService {
     basePrice: number,
     deliveryLinks: DeliveryLinksData | null,
     bucketStartMs: number,
+    distanceKm?: number,
   ) {
     if (!deliveryLinks || !Number.isFinite(basePrice) || basePrice < 0) {
       return [];
@@ -597,6 +607,9 @@ export class FoodsService {
       platform: string;
       price: number;
       base_price: number;
+      delivery_eta_min_minutes: number;
+      delivery_eta_max_minutes: number;
+      delivery_eta_text: string;
       order_url: string;
       icon_url: string | null;
     }> = [];
@@ -614,12 +627,76 @@ export class FoodsService {
             bucketStartMs,
           ),
           base_price: basePrice,
+          ...this.mockDeliveryEta(foodId, key, bucketStartMs, distanceKm),
           order_url: link.url,
           icon_url: link.icon_url ?? null,
         });
       }
     }
     return rows;
+  }
+
+  private detailDistanceKm(
+    query: FoodDetailQueryDto,
+    merchantCoordinates?: FirebaseFirestore.GeoPoint,
+  ): number | undefined {
+    if (
+      query.lat === undefined ||
+      query.lng === undefined ||
+      Number.isNaN(query.lat) ||
+      Number.isNaN(query.lng) ||
+      !merchantCoordinates
+    ) {
+      return undefined;
+    }
+
+    return geofire.distanceBetween(
+      [query.lat, query.lng],
+      [merchantCoordinates.latitude, merchantCoordinates.longitude],
+    );
+  }
+
+  private mockDeliveryEta(
+    foodId: string,
+    platform: PlatformKey,
+    bucketStartMs: number,
+    distanceKm?: number,
+  ) {
+    const base = this.deliveryEtaBaseRange(distanceKm);
+    const distanceSeed =
+      distanceKm == null ? 'no-location' : this.etaDistanceBucket(distanceKm);
+    const jitter =
+      Math.floor(
+        this.stableFraction(
+          `${foodId}:${platform}:eta:${bucketStartMs}:${distanceSeed}`,
+        ) * 9,
+      ) - 4;
+    const offset = PLATFORM_ETA_OFFSET_MINUTES[platform] + jitter;
+    const min = Math.max(10, base.min + offset);
+    const max = Math.max(min + 8, Math.min(90, base.max + offset));
+
+    return {
+      delivery_eta_min_minutes: min,
+      delivery_eta_max_minutes: max,
+      delivery_eta_text: `${min}-${max} menit`,
+    };
+  }
+
+  private deliveryEtaBaseRange(distanceKm?: number) {
+    if (distanceKm == null || !Number.isFinite(distanceKm)) {
+      return { min: 25, max: 40 };
+    }
+    if (distanceKm <= 2) return { min: 15, max: 25 };
+    if (distanceKm <= 5) return { min: 25, max: 40 };
+    if (distanceKm <= 10) return { min: 40, max: 60 };
+    return { min: 55, max: 75 };
+  }
+
+  private etaDistanceBucket(distanceKm: number): string {
+    if (distanceKm <= 2) return '0-2';
+    if (distanceKm <= 5) return '2-5';
+    if (distanceKm <= 10) return '5-10';
+    return '10-plus';
   }
 
   private async loadMerchantsMap(

@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { FoodsService } from './foods.service';
+import * as admin from 'firebase-admin';
 
 describe('FoodsService recommendations', () => {
   const foodDocs = [
@@ -325,6 +326,9 @@ describe('FoodsService recommendations', () => {
           expect.objectContaining({
             platform_key: 'gofood',
             base_price: 30000,
+            delivery_eta_min_minutes: expect.any(Number),
+            delivery_eta_max_minutes: expect.any(Number),
+            delivery_eta_text: expect.stringMatching(/^\d+-\d+ menit$/),
             order_url: 'https://gofood.co.id/salad',
           }),
         ]),
@@ -345,5 +349,75 @@ describe('FoodsService recommendations', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('uses user location for deterministic mock delivery ETA', async () => {
+    const service = new FoodsService(
+      {
+        getFirestore: jest.fn().mockReturnValue({
+          collection: jest.fn((name: string) => {
+            if (name === 'foods') {
+              return {
+                doc: jest.fn().mockReturnValue({
+                  get: jest.fn().mockResolvedValue({
+                    exists: true,
+                    id: 'salad-123',
+                    data: () => ({
+                      name: 'Salad Buah',
+                      merchant_id: 'merchant_a',
+                      base_price: 30000,
+                      comparison_data: {
+                        gofood: { url: 'https://gofood.co.id/salad' },
+                      },
+                    }),
+                  }),
+                }),
+              };
+            }
+            if (name === 'merchants') {
+              return {
+                where: jest.fn().mockReturnValue({
+                  get: jest.fn().mockResolvedValue({
+                    forEach: (
+                      callback: (doc: {
+                        data: () => Record<string, unknown>;
+                      }) => void,
+                    ) =>
+                      callback({
+                        data: () => ({
+                          merchant_id: 'merchant_a',
+                          is_active: true,
+                          coordinates: new admin.firestore.GeoPoint(
+                            -7.7737,
+                            110.3869,
+                          ),
+                        }),
+                      }),
+                  }),
+                }),
+              };
+            }
+            throw new Error(`Unexpected collection ${name}`);
+          }),
+        }),
+      } as never,
+      {} as never,
+    );
+
+    const response = await service.getFoodDetails('salad-123', {
+      lat: -7.774,
+      lng: 110.387,
+    });
+
+    expect(response.price_comparisons[0]).toEqual(
+      expect.objectContaining({
+        delivery_eta_min_minutes: expect.any(Number),
+        delivery_eta_max_minutes: expect.any(Number),
+        delivery_eta_text: expect.stringMatching(/^\d+-\d+ menit$/),
+      }),
+    );
+    expect(response.price_comparisons[0].delivery_eta_min_minutes).toBeLessThan(
+      25,
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
 import { FoodsService } from './foods.service';
 import { GetFoodsQueryDto } from './dto/get-foods-query.dto';
 import { RecommendationsQueryDto } from './dto/recommendations-query.dto';
+import { FoodDetailQueryDto } from './dto/food-detail-query.dto';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import {
   FOODS_PAGINATED_EXAMPLE,
@@ -69,14 +70,17 @@ export class FoodsController {
 
   @Get(':id')
   @ApiOperation({
-    summary: 'Food detail + simulated multi-platform prices',
+    summary: 'Food detail + simulated multi-platform prices and delivery ETA',
     description:
-      'Includes Universal Mock `price_comparisons` generated from `base_price` for stored provider deeplinks. Prices stay fixed in a six-hour UTC window, are not persisted, and include validity timestamps.',
+      'Includes Universal Mock `price_comparisons` generated from `base_price` for stored provider deeplinks. Each comparison also includes a deterministic mock delivery ETA. Prices and ETA stay fixed in a six-hour UTC window, are not persisted, and include validity timestamps. Pass optional `lat`/`lng` to make ETA distance-aware.',
   })
   @ApiOkResponse({
     schema: { example: FOOD_DETAIL_EXAMPLE },
   })
-  async getFoodDetails(@Param('id') id: string) {
-    return this.foodsService.getFoodDetails(id);
+  async getFoodDetails(
+    @Param('id') id: string,
+    @Query() query: FoodDetailQueryDto,
+  ) {
+    return this.foodsService.getFoodDetails(id, query);
   }
 }
