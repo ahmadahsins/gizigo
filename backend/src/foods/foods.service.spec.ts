@@ -117,6 +117,79 @@ describe('FoodsService recommendations', () => {
     expect(response.context.recommendation_source).toBe('fallback');
   });
 
+  it('hard-filters vegetarian food preferences before ranking', async () => {
+    const { service, rankFoodsForUser } = setup(
+      { food_preferences: ['Vegetarian Lifestyle'] },
+      [
+        {
+          id: 'chicken',
+          data: () => ({
+            name: 'Ayam Panggang',
+            description: 'Chicken meal',
+            nutrition_grade: 'EXCELLENT',
+            health_labels: ['High Protein'],
+            recommendation_score: 200,
+            is_featured: true,
+            is_available: true,
+          }),
+        },
+        {
+          id: 'tempe',
+          data: () => ({
+            name: 'Tumis Tempe',
+            description: 'Vegetarian meal',
+            nutrition_grade: 'GOOD',
+            health_labels: ['Vegetarian'],
+            recommendation_score: 1,
+            is_featured: false,
+            is_available: true,
+          }),
+        },
+      ],
+    );
+    rankFoodsForUser.mockResolvedValue(['chicken', 'tempe']);
+
+    const response = await service.getRecommendations('user1', {
+      featured_limit: 0,
+      limit: 5,
+    });
+
+    expect(rankFoodsForUser).toHaveBeenCalledWith(
+      expect.anything(),
+      [expect.objectContaining({ id: 'tempe' })],
+    );
+    expect(response.recommendations.map((food) => food.id)).toEqual(['tempe']);
+    expect(response.context.hard_filters).toEqual(['vegetarian']);
+  });
+
+  it('falls back to all foods when hard preference filters have no matches', async () => {
+    const { service, rankFoodsForUser } = setup(
+      { food_preferences: ['Vegetarian Lifestyle'] },
+      [
+        {
+          id: 'chicken',
+          data: () => ({
+            name: 'Ayam Panggang',
+            nutrition_grade: 'EXCELLENT',
+            health_labels: ['High Protein'],
+            is_available: true,
+          }),
+        },
+      ],
+    );
+    rankFoodsForUser.mockResolvedValue(['chicken']);
+
+    const response = await service.getRecommendations('user1', {
+      featured_limit: 0,
+      limit: 5,
+    });
+
+    expect(response.recommendations.map((food) => food.id)).toEqual([
+      'chicken',
+    ]);
+    expect(response.context.hard_filters).toEqual([]);
+  });
+
   it('does not recommend foods from inactive merchants', async () => {
     const { service } = setup(
       {},

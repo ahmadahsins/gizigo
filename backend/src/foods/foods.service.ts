@@ -278,8 +278,12 @@ export class FoodsService {
     });
 
     const usePersonalization = this.hasPersonalizationProfile(user);
+    const preferenceFilter = usePersonalization
+      ? this.applyFoodPreferenceHardFilter(foods, user)
+      : { foods, applied: [] };
+    const recommendationPool = preferenceFilter.foods;
 
-    const scored = foods.map((food) => {
+    const scored = recommendationPool.map((food) => {
       const dist = food['distance_in_km'] as number | undefined;
       const raw = usePersonalization
         ? this.personalizationScore(food, user, dist)
@@ -297,11 +301,11 @@ export class FoodsService {
     let sortedByScore = locallySorted;
     let recommendationSource: 'gemini' | 'fallback' = 'fallback';
 
-    if (usePersonalization && foods.length > 0) {
+    if (usePersonalization && recommendationPool.length > 0) {
       try {
         const aiOrder = await this.aiService.rankFoodsForUser(
           this.recommendationUserProfile(user),
-          foods.map((food) => ({
+          recommendationPool.map((food) => ({
             id: food['id'] as string,
             name: food['name'],
             description: food['description'],
@@ -365,6 +369,7 @@ export class FoodsService {
         onboarding_completed: Boolean(user['onboarding_completed']),
         personalized: usePersonalization,
         recommendation_source: recommendationSource,
+        hard_filters: preferenceFilter.applied,
       },
     };
   }
@@ -503,6 +508,74 @@ export class FoodsService {
     return score;
   }
 
+  private applyFoodPreferenceHardFilter(
+    foods: Record<string, unknown>[],
+    user: StoredRecord,
+  ): { foods: Record<string, unknown>[]; applied: string[] } {
+    const hardFilters = this.foodPreferenceHardFilters(user);
+    if (hardFilters.length === 0) return { foods, applied: [] };
+
+    const filtered = foods.filter((food) =>
+      hardFilters.every((filter) => this.matchesHardPreference(food, filter)),
+    );
+
+    if (filtered.length === 0) {
+      return { foods, applied: [] };
+    }
+
+    return { foods: filtered, applied: hardFilters };
+  }
+
+  private foodPreferenceHardFilters(user: StoredRecord): string[] {
+    const preferences = this.stringArray(user['food_preferences']);
+    const filters = new Set<string>();
+
+    for (const preference of preferences) {
+      const normalized = this.normalizedPreferenceKey(preference);
+      if (
+        normalized.includes('vegetarian') ||
+        normalized.includes('vegan') ||
+        normalized.includes('plantbased')
+      ) {
+        filters.add('vegetarian');
+      }
+      if (normalized.includes('glutenfree')) {
+        filters.add('gluten_free');
+      }
+    }
+
+    return [...filters];
+  }
+
+  private matchesHardPreference(
+    food: Record<string, unknown>,
+    filter: string,
+  ): boolean {
+    const searchable = [
+      ...this.stringArray(food['health_labels']),
+      this.stringOrNull(food['food_category']),
+      this.stringOrNull(food['name']),
+      this.stringOrNull(food['description']),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => this.normalizedPreferenceKey(value));
+
+    if (filter === 'vegetarian') {
+      return searchable.some(
+        (value) =>
+          value.includes('vegetarian') ||
+          value.includes('vegan') ||
+          value.includes('plantbased'),
+      );
+    }
+
+    if (filter === 'gluten_free') {
+      return searchable.some((value) => value.includes('glutenfree'));
+    }
+
+    return true;
+  }
+
   private tierBonus(grade?: string): number {
     if (grade === NutritionGrade.EXCELLENT) return 34;
     if (grade === NutritionGrade.VERY_GOOD) return 22;
@@ -588,6 +661,16 @@ export class FoodsService {
 
   private stringOrNull(value: unknown): string | null {
     return this.optionalString(value) ?? null;
+  }
+
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
+  }
+
+  private normalizedPreferenceKey(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
   }
 
   private matchesText(value: unknown, term: string): boolean {
