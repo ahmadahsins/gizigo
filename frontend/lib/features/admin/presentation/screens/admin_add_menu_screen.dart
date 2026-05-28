@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/admin_remote_data_source.dart';
+import '../widgets/ai_loading_dialog.dart';
 
 class AdminAddMenuScreen extends StatefulWidget {
   const AdminAddMenuScreen({
@@ -124,44 +125,47 @@ class _AdminAddMenuScreenState extends State<AdminAddMenuScreen> {
     }
 
     setState(() => _isSaving = true);
+    showAiLoadingDialog(context);
+
     try {
-      if (widget.useMerchantEndpoint) {
-        await _remoteDataSource.createOwnFood(
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          foodCategory: _selectedCategory!,
-          basePrice: price,
-          healthLabels: _selectedTags.toList(growable: false),
-          isAvailable: _isAvailable,
-          recipeIngredients: recipeIngredients,
-          gofoodLink: _gofoodController.text.trim(),
-          grabfoodLink: _grabfoodController.text.trim(),
-          shopeefoodLink: _shopeefoodController.text.trim(),
-          photoBytes: _photoBytes,
-          photoFilename: _photoFilename,
-        );
-      } else {
-        await _remoteDataSource.createFood(
-          merchantId: widget.merchantId,
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          foodCategory: _selectedCategory!,
-          basePrice: price,
-          healthLabels: _selectedTags.toList(growable: false),
-          isAvailable: _isAvailable,
-          recipeIngredients: recipeIngredients,
-          gofoodLink: _gofoodController.text.trim(),
-          grabfoodLink: _grabfoodController.text.trim(),
-          shopeefoodLink: _shopeefoodController.text.trim(),
-          photoBytes: _photoBytes,
-          photoFilename: _photoFilename,
-        );
-      }
+      final result = widget.useMerchantEndpoint
+          ? await _remoteDataSource.createOwnFood(
+              name: _nameController.text.trim(),
+              description: _descriptionController.text.trim(),
+              foodCategory: _selectedCategory!,
+              basePrice: price,
+              healthLabels: _selectedTags.toList(growable: false),
+              isAvailable: _isAvailable,
+              recipeIngredients: recipeIngredients,
+              gofoodLink: _gofoodController.text.trim(),
+              grabfoodLink: _grabfoodController.text.trim(),
+              shopeefoodLink: _shopeefoodController.text.trim(),
+              photoBytes: _photoBytes,
+              photoFilename: _photoFilename,
+            )
+          : await _remoteDataSource.createFood(
+              merchantId: widget.merchantId,
+              name: _nameController.text.trim(),
+              description: _descriptionController.text.trim(),
+              foodCategory: _selectedCategory!,
+              basePrice: price,
+              healthLabels: _selectedTags.toList(growable: false),
+              isAvailable: _isAvailable,
+              recipeIngredients: recipeIngredients,
+              gofoodLink: _gofoodController.text.trim(),
+              grabfoodLink: _grabfoodController.text.trim(),
+              shopeefoodLink: _shopeefoodController.text.trim(),
+              photoBytes: _photoBytes,
+              photoFilename: _photoFilename,
+            );
+
       if (!mounted) return;
+      Navigator.of(context).pop();
 
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
+      Navigator.of(context).pop();
       setState(() => _isSaving = false);
       _showSnackBar(_errorMessage(error));
     }

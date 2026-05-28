@@ -245,6 +245,7 @@ class FoodPriceComparison {
     required this.price,
     required this.basePrice,
     required this.orderUrl,
+    this.estimation = 'Estimasi 30-45 menit',
   });
 
   final String platformKey;
@@ -252,6 +253,7 @@ class FoodPriceComparison {
   final int? price;
   final int? basePrice;
   final String orderUrl;
+  final String estimation;
 
   String get formattedPrice => formatRupiah(price ?? basePrice);
 
@@ -262,6 +264,10 @@ class FoodPriceComparison {
       price: FoodDetail._asInt(json['price']),
       basePrice: FoodDetail._asInt(json['base_price']),
       orderUrl: FoodDetail._asString(json['order_url']),
+      estimation: FoodDetail._asString(
+        json['delivery_eta_text'] ?? json['estimation'],
+        fallback: 'Estimasi 30-45 menit',
+      ),
     );
   }
 }

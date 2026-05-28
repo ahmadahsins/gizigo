@@ -12,6 +12,7 @@ class AdminFoodDetail {
     this.gofoodLink = '',
     this.grabfoodLink = '',
     this.shopeefoodLink = '',
+    this.nutritionGrade = '',
   });
 
   final String id;
@@ -26,6 +27,7 @@ class AdminFoodDetail {
   final String gofoodLink;
   final String grabfoodLink;
   final String shopeefoodLink;
+  final String nutritionGrade;
 
   factory AdminFoodDetail.fromJson(Map<String, dynamic> json) {
     final labels = json['health_labels'];
@@ -74,6 +76,7 @@ class AdminFoodDetail {
         (json['comparison_data'] as Map?)?['shopeefood']?['url'],
         fallback: _asString(json['shopeefood_link']),
       ),
+      nutritionGrade: _asString(json['nutrition_grade']),
     );
   }
 

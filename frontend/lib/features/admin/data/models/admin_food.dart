@@ -7,6 +7,7 @@ class AdminFood {
     required this.imageUrl,
     required this.basePrice,
     required this.isAvailable,
+    this.nutritionGrade = '',
   });
 
   final String id;
@@ -14,6 +15,7 @@ class AdminFood {
   final String imageUrl;
   final int? basePrice;
   final bool isAvailable;
+  final String nutritionGrade;
 
   String get formattedPrice => formatRupiah(basePrice);
 
@@ -24,6 +26,7 @@ class AdminFood {
       imageUrl: imageUrl,
       basePrice: basePrice,
       isAvailable: isAvailable ?? this.isAvailable,
+      nutritionGrade: nutritionGrade,
     );
   }
 
@@ -37,6 +40,7 @@ class AdminFood {
       ),
       basePrice: _asInt(json['base_price']),
       isAvailable: _asBool(json['is_available'], fallback: true),
+      nutritionGrade: _asString(json['nutrition_grade']),
     );
   }
 
