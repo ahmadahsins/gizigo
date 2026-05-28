@@ -102,6 +102,20 @@ export class AdminMerchantsController {
     return this.foodsManagementService.listFoodsForMerchant(merchantId, query);
   }
 
+  @Get(':merchantId/foods/:foodId')
+  @ApiOperation({
+    summary: 'Get a food detail scoped to one merchant (canonical admin UI)',
+    description:
+      'Returns stored menu fields for edit forms. Recipe is intentionally omitted because it is request-only and not persisted.',
+  })
+  async getMerchantFood(
+    @Param('merchantId') merchantId: string,
+    @Param('foodId') foodId: string,
+  ) {
+    await this.adminMerchantsService.assertMerchantExists(merchantId);
+    return this.foodsManagementService.getFoodForAdmin(foodId, merchantId);
+  }
+
   @Post(':merchantId/foods')
   @ApiOperation({
     summary: 'Create a food for one merchant (canonical admin UI)',

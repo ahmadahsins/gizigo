@@ -220,8 +220,21 @@ export class FoodsManagementService {
       role: UserRole.MERCHANT,
       merchantId,
     });
-    delete food['recipe'];
-    return { id, ...food };
+    return this.toManagedFoodResponse(id, food);
+  }
+
+  async getFoodForAdmin(id: string, merchantScopeId?: string) {
+    const doc = await this.db().collection('foods').doc(id).get();
+    if (!doc.exists) {
+      throw new NotFoundException('Food not found');
+    }
+
+    const food = { ...(doc.data() as Record<string, unknown>) };
+    this.assertFoodOwnership(food, {
+      role: UserRole.ADMIN,
+      merchantScopeId,
+    });
+    return this.toManagedFoodResponse(id, food);
   }
 
   async getMerchantDashboard(merchantId: string) {
@@ -382,6 +395,16 @@ export class FoodsManagementService {
 
   private matchesText(value: unknown, term: string): boolean {
     return typeof value === 'string' && value.toLowerCase().includes(term);
+  }
+
+  private toManagedFoodResponse(id: string, food: Record<string, unknown>) {
+    const response = { ...food };
+    delete response['recipe'];
+    return {
+      id,
+      ...response,
+      image_url: response['photo_url'] ?? null,
+    };
   }
 
   private buildDeliveryLinksPayload(value: unknown) {

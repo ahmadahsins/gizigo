@@ -390,6 +390,12 @@ describe('FoodsManagementService', () => {
       data: () => ({
         merchant_id: 'merchant_a',
         name: 'Hidden soup',
+        description: 'Warm soup',
+        food_category: 'dinner',
+        health_labels: ['Low Fat'],
+        base_price: 18000,
+        comparison_data: { gofood: { url: 'https://gofood.example/food1' } },
+        photo_url: 'https://img.example/food1.jpg',
         is_available: false,
         recipe: { ingredients: ['private'] },
       }),
@@ -398,9 +404,62 @@ describe('FoodsManagementService', () => {
     const result = await service.getFoodForMerchant('food1', 'merchant_a');
 
     expect(result).toEqual(
-      expect.objectContaining({ id: 'food1', is_available: false }),
+      expect.objectContaining({
+        id: 'food1',
+        name: 'Hidden soup',
+        description: 'Warm soup',
+        food_category: 'dinner',
+        health_labels: ['Low Fat'],
+        base_price: 18000,
+        image_url: 'https://img.example/food1.jpg',
+        comparison_data: { gofood: { url: 'https://gofood.example/food1' } },
+        is_available: false,
+      }),
     );
     expect(result).not.toHaveProperty('recipe');
+  });
+
+  it('gets food detail for admin edit forms without exposing recipe', async () => {
+    foodRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        merchant_id: 'merchant_a',
+        name: 'Admin soup',
+        description: 'Editable soup',
+        food_category: 'dinner',
+        health_labels: ['High Protein'],
+        base_price: 21000,
+        is_available: true,
+        comparison_data: { grabfood: { url: 'https://grab.example/food1' } },
+        recipe: { ingredients: ['private'] },
+      }),
+    });
+
+    const result = await service.getFoodForAdmin('food1');
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'food1',
+        name: 'Admin soup',
+        description: 'Editable soup',
+        food_category: 'dinner',
+        health_labels: ['High Protein'],
+        base_price: 21000,
+        comparison_data: { grabfood: { url: 'https://grab.example/food1' } },
+      }),
+    );
+    expect(result).not.toHaveProperty('recipe');
+  });
+
+  it('blocks scoped admin from reading food owned by another merchant', async () => {
+    foodRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ merchant_id: 'merchant_b', is_available: true }),
+    });
+
+    await expect(
+      service.getFoodForAdmin('food1', 'merchant_a'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('blocks merchant from reading another merchants managed food detail', async () => {

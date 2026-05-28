@@ -85,6 +85,16 @@ export class AdminController {
     });
   }
 
+  @Get('foods/:id')
+  @ApiOperation({
+    summary: 'Get food detail for management (legacy admin route)',
+    description:
+      'Returns stored menu fields for edit forms. Recipe is intentionally omitted because it is request-only and not persisted.',
+  })
+  async getFood(@Param('id') id: string) {
+    return this.foodsManagementService.getFoodForAdmin(id);
+  }
+
   @Put('foods/:id')
   @ApiOperation({
     summary: 'Update food entry (legacy admin route)',
