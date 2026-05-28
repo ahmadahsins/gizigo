@@ -381,6 +381,7 @@ class AdminRemoteDataSource {
           gofoodLink: source.containsKey('comparison_data') || source.containsKey('gofood_link') ? parsed.gofoodLink : fallback.gofoodLink,
           grabfoodLink: source.containsKey('comparison_data') || source.containsKey('grabfood_link') ? parsed.grabfoodLink : fallback.grabfoodLink,
           shopeefoodLink: source.containsKey('comparison_data') || source.containsKey('shopeefood_link') ? parsed.shopeefoodLink : fallback.shopeefoodLink,
+          nutritionGrade: source.containsKey('nutrition_grade') ? parsed.nutritionGrade : fallback.nutritionGrade,
         );
       }
     }
@@ -466,6 +467,7 @@ class AdminRemoteDataSource {
           gofoodLink: source.containsKey('comparison_data') ? parsed.gofoodLink : fallback.gofoodLink,
           grabfoodLink: source.containsKey('comparison_data') ? parsed.grabfoodLink : fallback.grabfoodLink,
           shopeefoodLink: source.containsKey('comparison_data') ? parsed.shopeefoodLink : fallback.shopeefoodLink,
+          nutritionGrade: source.containsKey('nutrition_grade') ? parsed.nutritionGrade : fallback.nutritionGrade,
         );
       }
     }
@@ -505,7 +507,17 @@ class AdminRemoteDataSource {
     );
 
     final data = response.data;
-    final id = data is Map ? _asString(data['id'] ?? data['food_id']) : '';
+    final foodJson = data is Map
+        ? _firstMap(data, const ['food', 'data', 'item'])
+        : null;
+    final id = data is Map
+        ? _asString(
+            foodJson?['id'] ??
+                foodJson?['food_id'] ??
+                data['id'] ??
+                data['food_id'],
+          )
+        : '';
 
     if (id.isNotEmpty && photoBytes != null && photoBytes.isNotEmpty) {
       await _tryUploadFoodPhoto(
@@ -516,6 +528,8 @@ class AdminRemoteDataSource {
             ApiConstants.adminMerchantFoodPhoto(merchantId, foodId),
       );
     }
+
+    if (foodJson != null) return AdminFood.fromJson(foodJson);
 
     return AdminFood(
       id: id,

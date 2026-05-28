@@ -867,7 +867,7 @@ class _PriceComparisonCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Estimasi 30-45 menit',
+                        comparison.estimation,
                         style: AppTextStyles.bodySmall,
                       ),
                     ],
