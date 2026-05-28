@@ -1,4 +1,8 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { NutritionGrade } from '../common/enums/nutrition-grade.enum';
@@ -75,6 +79,7 @@ const RECOMMENDATIONS_SCHEMA = {
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
   private readonly model: string;
   private readonly timeoutMs: number;
   private readonly client: GoogleGenAI | null;
@@ -84,12 +89,12 @@ export class AiService {
     this.model =
       this.configService.get<string>('GEMINI_MODEL') ?? 'gemini-2.5-flash';
     const configuredTimeout = Number(
-      this.configService.get<string>('GEMINI_TIMEOUT_MS') ?? 10000,
+      this.configService.get<string>('GEMINI_TIMEOUT_MS') ?? 20000,
     );
     this.timeoutMs =
       Number.isFinite(configuredTimeout) && configuredTimeout > 0
         ? configuredTimeout
-        : 10000;
+        : 20000;
     this.client = apiKey ? new GoogleGenAI({ apiKey }) : null;
   }
 
@@ -120,6 +125,7 @@ export class AiService {
       return this.validateNutritionAssessment(parsed, recipe);
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
+      this.logAiFailure('Nutrition analysis', error);
       throw new ServiceUnavailableException(
         'Nutrition analysis is temporarily unavailable',
       );
@@ -163,6 +169,7 @@ export class AiService {
       return parsed.ordered_food_ids;
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
+      this.logAiFailure('AI recommendations', error);
       throw new ServiceUnavailableException(
         'AI recommendations are temporarily unavailable',
       );
@@ -194,6 +201,32 @@ export class AiService {
   private parseJson(text: string | undefined): unknown {
     if (!text) throw new Error('AI response was empty');
     return JSON.parse(text) as unknown;
+  }
+
+  private logAiFailure(scope: string, error: unknown): void {
+    const details = this.describeError(error);
+    this.logger.warn(
+      `${scope} failed via Gemini model ${this.model} after ${this.timeoutMs}ms timeout window: ${details}`,
+    );
+  }
+
+  private describeError(error: unknown): string {
+    if (!(error instanceof Error)) return String(error);
+
+    const extra = error as Error & {
+      code?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+    };
+    const metadata = [
+      extra.code ? `code=${String(extra.code)}` : undefined,
+      extra.status ? `status=${String(extra.status)}` : undefined,
+      extra.statusCode ? `statusCode=${String(extra.statusCode)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    return [error.name, error.message, metadata].filter(Boolean).join(' | ');
   }
 
   private validateNutritionAssessment(

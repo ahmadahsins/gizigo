@@ -25,7 +25,7 @@ Server berjalan di `http://localhost:3000`. Swagger UI tersedia di `/api`.
 
 Set `GEMINI_API_KEY` untuk mengaktifkan analisis gizi menu dan rekomendasi
 personal. `GEMINI_MODEL` opsional dan default-nya `gemini-2.5-flash`;
-`GEMINI_TIMEOUT_MS` default-nya `10000`.
+`GEMINI_TIMEOUT_MS` default-nya `20000`.
 
 - `POST /merchant/foods`, endpoint canonical
   `POST /admin/merchants/:merchantId/foods`, dan endpoint legacy
@@ -163,7 +163,7 @@ Set di **Settings → Environment Variables** (centang Production + Preview):
 | `FIREBASE_PRIVATE_KEY`  | Private key (gunakan literal `\n` antar baris)    |
 | `GEMINI_API_KEY`        | API key Gemini untuk analisis/rekomendasi AI      |
 | `GEMINI_MODEL`          | Model Gemini opsional; default `gemini-2.5-flash` |
-| `GEMINI_TIMEOUT_MS`     | Timeout request AI opsional; default `10000` ms   |
+| `GEMINI_TIMEOUT_MS`     | Timeout request AI opsional; default `20000` ms   |
 
 Format `FIREBASE_PRIVATE_KEY`:
 
@@ -208,6 +208,7 @@ pada CSP Helmet. Redeploy setelah memastikan konfigurasi ini tidak dihapus.
 | `NOT_FOUND` di semua route         | Rewrites tidak aktif — pastikan [`vercel.json`](vercel.json) punya entry `"rewrites": [{ "source": "/(.*)", "destination": "/api" }]`                                    |
 | Build error: `public` not found    | Folder [`public/.gitkeep`](public/.gitkeep) harus ada di repo (Framework **Other** membutuhkan output directory)                                                         |
 | `500 FUNCTION_INVOCATION_FAILED`   | Cek **Runtime Logs** di dashboard Vercel. Kemungkinan: `dist/` tidak ter-copy ke `api/dist/` — pastikan build command di `vercel.json` mencakup `cp -r dist api/dist`    |
+| `Nutrition analysis is temporarily unavailable` | Cek **Runtime Logs** untuk log `AiService`. Biasanya disebabkan timeout Gemini, quota/rate limit, model tidak tersedia untuk API key, atau response AI tidak sesuai schema. Set `GEMINI_TIMEOUT_MS=20000` atau nilai lain yang tetap di bawah `maxDuration` Vercel. |
 | `Unable to determine event source` | Handler serverless masih menggunakan adapter AWS Lambda (`@vendia/serverless-express`). Ganti ke direct Express handler — lihat [`src/serverless.ts`](src/serverless.ts) |
 
 ---
