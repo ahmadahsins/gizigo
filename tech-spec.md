@@ -12,7 +12,7 @@ Sistem menggunakan arsitektur **Client-Server** dengan komunikasi melalui **REST
 
 - **Frontend:** Flutter (Mobile App).
 - **Backend:** Nest.js (REST API & Business Logic) dengan `firebase-admin` SDK.
-- **Database & Infrastructure:** Firebase (Firestore, Authentication, Storage).
+- **Database & Infrastructure:** Firebase (Firestore & Authentication), Cloudinary untuk aset gambar, dan Vercel untuk deployment backend serverless.
 
 ---
 
@@ -25,7 +25,9 @@ Sistem menggunakan arsitektur **Client-Server** dengan komunikasi melalui **REST
 | **Authentication**    | Firebase Auth & `firebase-admin` | Mendukung OAuth2 (Google Sign-In) di Frontend dan verifikasi token JWT di Backend via Admin SDK. |
 | **Database**          | Cloud Firestore                  | _NoSQL document-based_, mendukung sinkronisasi _real-time_ dan query fleksibel.                  |
 | **File Storage**      | Cloudinary                       | Penyimpanan aset gambar. Cloudinary cocok untuk optimasi gambar _on-the-fly_.                    |
+| **AI Service**        | Gemini (`@google/genai`)         | Analisis gizi resep dan ranking rekomendasi personal.                                            |
 | **API Documentation** | Swagger/OpenAPI                  | Standarisasi dokumentasi API untuk integrasi Frontend-Backend.                                   |
+| **Backend Deploy**    | Vercel Serverless Function       | Backend NestJS dibungkus Express handler serverless melalui `api/index.js`.                      |
 
 ---
 
@@ -51,7 +53,7 @@ Struktur data dirancang untuk mendukung MVP UI (badge gizi, filter, lokasi, hist
 - `food_preferences`: array string; preference tertentu dipakai sebagai hard filter rekomendasi (mis. `Vegetarian Lifestyle` -> menu dengan sinyal vegetarian/vegan/plant-based), lalu sisanya dipakai untuk scoring/ranking
 - `dietary_restrictions`: array string (pembatasan diet untuk rekomendasi Gemini)
 - `taste_profile`: array string (profil rasa untuk rekomendasi Gemini)
-  - `onboarding_completed`: boolean
+- `onboarding_completed`: boolean
 - `created_at`: timestamp
 - `updated_at`: timestamp (server)
 
@@ -84,8 +86,8 @@ selalu berada di Firebase Auth dan tidak pernah menjadi field Firestore.
 - `description`: string
 - `photo_url`: string (opsional sampai foto menu berhasil di-upload; URL Cloudinary ditetapkan backend, bukan input bebas pada create menu)
 - **`nutrition_grade`**: string enum **`EXCELLENT` | `VERY_GOOD` | `GOOD`** (badge “Excellent / Very good / Good” + filter **Label** di UI)
-- **`food_category`**: string salah satu: `main_course`, `appetizers`, `snacks`, `desserts`, `beverages` (chip **Categories** di home)
-- `health_labels`: array string (tag tambahan, mis. “High Protein”; **bukan** pengganti `nutrition_grade`)
+- **`food_category`**: string salah satu: `main_course`, `appetizers`, `snacks`, `desserts`, `beverages`, `breakfast`, `lunch`, `dinner`, `salads` (chip **Categories** di home/search)
+- `health_labels`: array string (tag tambahan, mis. “High Protein”; **bukan** pengganti `nutrition_grade`). Opsi statis form Flutter saat ini: `High Protein`, `Low Calorie`, `Vegan`, `Vegetarian`, `Low Carb`, `Gluten Free`, `Dairy Free`, `Sugar Free`.
 - `nutritional_info`: map hasil analisis Gemini per serving `{ calories, protein_g, fat_g, carb_g }`
 - `nutrition_assessment_reason`: string alasan penilaian umum dari Gemini
 - `nutrition_analyzed_at`: timestamp analisis terakhir
@@ -141,7 +143,7 @@ Base URL contoh: `https://<host>/` — dokumentasi interaktif: `GET /api` (Swagg
 | GET    | `/meta/food-categories`     | Daftar kategori + label EN/ID untuk chip Flutter                           |
 | GET    | `/meta/nutrition-grades`    | Daftar tier gizi + label EN/ID (selaras `nutrition_grade`)                 |
 | GET    | `/meta/nutrition-goals`     | Label wizard untuk `nutrition_goal` (`DIET`, `BULKING`, `MAINTAIN`)        |
-| GET    | `/meta/locations/search?q=` | **Placeholder** — mengembalikan `items: []` sampai integrasi Places/Mapbox |
+| GET    | `/meta/locations/search?q=` | **Placeholder** — backend mengembalikan `items: []`; pencarian alamat saat ini dilakukan Flutter via Nominatim/OpenStreetMap |
 
 ### 5.3 Foods (Bearer wajib)
 
@@ -266,7 +268,18 @@ Dimana:
 
 Backend mengambil menu aktif dari merchant aktif, lalu menerapkan hard filtering berdasarkan `food_preferences` sebelum ranking. Saat ini preference seperti `Vegetarian Lifestyle`, `Vegetarian`, `Vegan`, atau `Plant-Based` hanya meloloskan menu yang memiliki sinyal vegetarian/vegan/plant-based pada `health_labels`, `food_category`, `name`, atau `description`; `Gluten Free` meloloskan menu dengan sinyal gluten-free. Jika hard filter tidak menghasilkan kandidat, backend memakai semua menu sebagai fallback agar home tidak kosong. Setelah filtering, Gemini meranking kandidat berdasarkan profil tubuh, `nutrition_goal`, preferences, restrictions, dan taste profile. Slot **featured** dipilih dari hasil ranking yang sudah difilter, sehingga menu featured yang tidak cocok dengan hard preference tidak dipaksa tampil. Scoring lokal (`recommendation_score`, tier gizi, nutrisi, preferensi, dan jarak) dipertahankan sebagai fallback ketika Gemini tidak tersedia atau profil belum berisi data personalisasi; response menandai sumber melalui `context.recommendation_source` dan filter aktif melalui `context.hard_filters`. Menu merchant dengan `is_active: false` tidak tampil pada list, rekomendasi, maupun detail customer tanpa mengubah status `foods.is_available`.
 
-### D. Universal Mock Price Comparison & Delivery ETA
+### D. Gemini AI Nutrition Analysis
+
+Backend memakai `AiService` untuk dua fungsi AI: analisis gizi resep pada create/update menu dan ranking rekomendasi personal. Model default adalah `gemini-2.5-flash`, dapat dioverride dengan `GEMINI_MODEL`.
+
+- `GEMINI_API_KEY` wajib tersedia di environment backend agar analisis dan ranking AI aktif.
+- `GEMINI_TIMEOUT_MS` default implementasi saat ini adalah `20000` ms agar lebih cocok untuk runtime serverless Vercel.
+- Output analisis gizi divalidasi ketat: `calories`, `protein_g`, `fat_g`, `carb_g`, `grade`, `accepted`, dan `reason` wajib valid.
+- Grade `BELOW_GOOD` tidak disimpan sebagai menu customer; caller management menolak menu dengan status `422`.
+- Jika provider error, timeout, quota/rate limit, model tidak tersedia, response kosong, atau format JSON tidak valid, backend mengembalikan pesan aman `Nutrition analysis is temporarily unavailable` dan menulis detail internal ke log `AiService` tanpa membocorkan recipe atau API key.
+- Pada rekomendasi, kegagalan Gemini tidak membuat home kosong karena backend memakai ranking lokal fallback dan menandai `context.recommendation_source: "fallback"`.
+
+### E. Universal Mock Price Comparison & Delivery ETA
 
 Untuk kebutuhan hackathon, aplikasi tidak memakai API harga live GoFood, GrabFood, atau ShopeeFood. Merchant/admin hanya menginput deeplink platform yang tersedia pada form add/edit menu:
 
@@ -290,7 +303,7 @@ Untuk kebutuhan hackathon, aplikasi tidak memakai API harga live GoFood, GrabFoo
 - Rentang ETA dasar: tanpa lokasi `25-40 menit`; `0-2 km` sekitar `15-25 menit`; `2-5 km` sekitar `25-40 menit`; `5-10 km` sekitar `40-60 menit`; `>10 km` sekitar `55-75 menit`. Setiap platform mendapat offset kecil dan jitter deterministik.
 - Platform tanpa deeplink tidak dimasukkan ke `price_comparisons`, karena customer tidak memiliki tujuan pemesanan yang dapat dibuka.
 
-### E. Upload foto menu (Cloudinary)
+### F. Upload foto menu (Cloudinary)
 
 Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload dilakukan melalui request terpisah setelah create menu berhasil. Pemisahan ini mencegah aset Cloudinary tidak terpakai apabila Gemini menolak resep dengan grade di bawah `GOOD`.
 
@@ -325,19 +338,48 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 
 ---
 
-## 8. Frontend Implementation (Flutter) & Backend Integration
+## 8. Backend Deployment & Environment
+
+Backend dideploy sebagai Vercel Serverless Function dengan root directory `backend`. Konfigurasi utama berada di `backend/vercel.json`:
+
+- `buildCommand`: `pnpm run build`, lalu menyalin `dist` dan `node_modules` ke `api/dist`.
+- `rewrites`: semua route diarahkan ke `/api`.
+- `api/index.js`: entry point Vercel yang memuat `dist/src/serverless.js`.
+- `maxDuration`: 30 detik dan `memory`: 1024 MB.
+
+Environment variable backend yang diperlukan:
+
+| Variable                | Fungsi                                                                  |
+| :---------------------- | :---------------------------------------------------------------------- |
+| `FIREBASE_PROJECT_ID`   | Project ID Firebase                                                     |
+| `FIREBASE_CLIENT_EMAIL` | Email service account Firebase Admin                                    |
+| `FIREBASE_PRIVATE_KEY`  | Private key service account; di Vercel gunakan literal `\n` antar baris |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name                                                   |
+| `CLOUDINARY_API_KEY`    | Cloudinary API key                                                      |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret                                                   |
+| `GEMINI_API_KEY`        | API key Gemini                                                          |
+| `GEMINI_MODEL`          | Opsional; default `gemini-2.5-flash`                                    |
+| `GEMINI_TIMEOUT_MS`     | Opsional; default `20000` ms                                            |
+
+Swagger tersedia di `/api`. Jika terjadi error AI di Vercel, cek Runtime Logs dan cari log dari `AiService`.
+
+---
+
+## 9. Frontend Implementation (Flutter) & Backend Integration
 
 ### A. State Management & Architecture
 
-- **State Management:** Menggunakan **Riverpod** atau **Provider** (direkomendasikan untuk kecepatan MVP Hackathon)
+- **State Management:** Menggunakan **Riverpod** (`flutter_riverpod`) terutama pada flow Home dan data async.
 - **Routing:** Menggunakan `go_router` untuk navigasi halaman yang deklaratif dan mempermudah setup _Deep Linking_ di masa depan.
 
 ### B. Paket Utama (Dependencies)
 
 - **HTTP Client:** `dio` - Digunakan untuk memanggil endpoint API Nest.js. `dio` sangat ideal karena mendukung fitur _Interceptor_ untuk menyelipkan token Auth ke Header secara otomatis.
 - **Geolocation:** `geolocator` - Mengambil lokasi terkini perangkat (latitude & longitude) untuk diteruskan ke backend sebagai parameter pencarian jarak.
+- **Maps & Geocoding:** `flutter_map`, `latlong2`, dan Nominatim OpenStreetMap untuk pemilihan titik, pencarian alamat, dan reverse geocoding di sisi Flutter.
 - **Local Storage:** `flutter_secure_storage` - Menyimpan Firebase ID Token atau sesi _auth_ secara aman di perangkat.
 - **Firebase SDK:** `firebase_core`, `firebase_auth`, dan `google_sign_in` untuk menangani proses autentikasi di sisi klien.
+- **Media & Deeplink:** `image_picker` untuk memilih foto profil/menu dan `url_launcher` untuk membuka deeplink GoFood/GrabFood/ShopeeFood.
 
 ### C. Alur Integrasi Frontend ke Backend
 
@@ -349,8 +391,9 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
     - Ambil label goal dari `GET /meta/nutrition-goals`.
     - Kirim `PATCH /users/me` dengan `gender`, `age`, `weight_kg`, `height_cm`, `nutrition_goal`, `food_preferences`, `dietary_restrictions`, `taste_profile`, `onboarding_completed: true`.
 3.  **API Requests dengan Interceptor (`dio`):**
-    - Set `BaseOptions(baseUrl: 'https://<your-api-host>/')`.
+    - Set `BaseOptions(baseUrl: ApiConstants.baseUrl)`. Default production saat ini `https://be-gizigo.vercel.app`; override lokal dapat memakai `--dart-define=API_BASE_URL=http://localhost:3000`.
     - Pada setiap request ke endpoint terproteksi, tambahkan header `Authorization: Bearer <Firebase_ID_Token>` (biasanya via `Interceptor` yang membaca token dari `flutter_secure_storage`).
+    - Jika response `401`, interceptor mencoba refresh Firebase token dan retry request satu kali.
 4.  **Konvensi JSON:** Backend memakai **`snake_case`** untuk field JSON (selaras Firestore). Di Flutter gunakan `@JsonKey(name: 'base_price')` / `json_serializable` atau mapper manual; hindari mengubah kontrak API hanya untuk gaya Dart.
 5.  **Meta bootstrap:** `GET /meta/food-categories`, `GET /meta/nutrition-grades`, `GET /meta/nutrition-goals` untuk chip/filter dan wizard onboarding.
 6.  **Home — rekomendasi personal:**
@@ -359,10 +402,12 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
     - Kategori horizontal / filter lain boleh tetap pakai `GET /foods` dengan query yang sama seperti sebelumnya.
 7.  **Search listing:** **`GET /foods/search`** dengan parameter **yang sama** seperti `/foods`, termasuk `q`.
 8.  **Detail menu:**
-    - `GET /foods/{id}?lat=&lng=` → render deskripsi, `vendor_name`, `nutrition_grade`, dan list **`price_comparisons`** (gunakan `price` untuk teks hijau, `delivery_eta_text` untuk estimasi pengiriman, dan `order_url` untuk `url_launcher`).
+    - Backend mendukung query opsional `lat`/`lng` pada `GET /foods/{id}` untuk ETA berbasis jarak.
+    - Implementasi Flutter saat ini memanggil `GET /foods/{id}` tanpa `lat`/`lng`, sehingga `delivery_eta_text` memakai fallback ETA universal sampai lokasi diteruskan ke detail screen.
+    - Render deskripsi, `vendor_name`, `nutrition_grade`, dan list **`price_comparisons`** (gunakan `price` untuk teks hijau, `delivery_eta_text` untuk estimasi pengiriman, dan `order_url` untuk `url_launcher`).
     - Setelah layar terbuka, panggil `POST /users/me/recently-viewed` dengan `{ "food_id": "<id>" }`.
 9.  **Recently viewed:** `GET /users/me/recently-viewed?q=&page=&limit=` — kelompokkan di Flutter berdasarkan tanggal dari `viewed_at` (hari ini / kemarin / tanggal).
-10. **Lokasi:** Setelah user memilih lokasi (map / GPS), `POST /users/me/recent-locations`; daftar “Recent” dari `GET /users/me/recent-locations`. Autocomplete jalanan tetap bisa memakai Places di klien; `GET /meta/locations/search` saat ini placeholder.
+10. **Lokasi:** Setelah user memilih lokasi (map / GPS), `POST /users/me/recent-locations`; daftar “Recent” dari `GET /users/me/recent-locations`. Pencarian alamat dan reverse geocoding saat ini memakai Nominatim/OpenStreetMap di Flutter; `GET /meta/locations/search` di backend masih placeholder.
 11. **Profil:** `GET /users/me` / `PATCH /users/me` untuk data akun + onboarding; `POST /users/me/photo` (`multipart/form-data`, JPEG/PNG/WebP maks. 5 MB) untuk mengganti foto profil.
 12. **Tambah / edit menu merchant atau admin:**
     - User dapat memilih foto dan mengisi metadata maupun resep dalam satu form; urutan pengisian pada UI tidak dibatasi.
@@ -388,7 +433,7 @@ Foto menu dipilih pada form yang sama dengan metadata dan resep, tetapi upload d
 | Search                 | `GET /foods/search`                                                                                 |
 | Detail menu            | `GET /foods/:id`, `POST /users/me/recently-viewed`                                                  |
 | Recently viewed        | `GET /users/me/recently-viewed`                                                                     |
-| Select location        | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Places di Flutter)           |
+| Select location        | `GET /users/me/recent-locations`, `POST /users/me/recent-locations` (+ Nominatim/OpenStreetMap di Flutter) |
 | Profil                 | `GET /users/me`, `PATCH /users/me`, `POST /users/me/photo`                                          |
 | Landing merchant       | `GET /merchant/dashboard`, `GET /merchant/foods?q=&is_available=`                                   |
 | Profil merchant        | `GET /merchant/me`, `PATCH /merchant/me`                                                            |
@@ -519,7 +564,7 @@ dio.interceptors.add(InterceptorsWrapper(
 
 ---
 
-## 9. Roadmap Pengembangan (MVP)
+## 10. Roadmap Pengembangan (MVP)
 
 - **Minggu 1:** Setup Environment (Nest.js & Flutter), Firebase Configuration, Auth Module.
 - **Minggu 2:** Pengembangan Schema Firestore, Admin Dashboard (API), Manual Data Entry.
